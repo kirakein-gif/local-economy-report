@@ -9,7 +9,7 @@ from io import BytesIO
 # ---------------------------------------------------------
 # 1. 환경 설정 및 상수
 # ---------------------------------------------------------
-st.set_page_config(page_title="지역경제활성화 자동 집계 시스템", layout="wide")
+st.set_page_config(page_title="지역경제활성화 실적 자동 집계", layout="wide")
 
 MY_G2B_API_KEY = "V%2FBFQCvaQlP%2F3ebvSQyuncyYbTzwqIxQ5yDO%2Fc%2FnX3YTRLd3ZZXxTeNhVd99xGMLoQOWLSwS7x%2BJ07aIn7Fk0w%3D%3D"
 API_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
@@ -43,11 +43,11 @@ def get_addr_api(biz_num, corp_name):
 # ---------------------------------------------------------
 # 3. 메인 UI
 # ---------------------------------------------------------
-st.title("📊 지역경제활성화 자동 집계 시스템")
+st.title("📊 지역경제활성화 실적 자동 집계")
 
 with st.sidebar:
     st.header("1. 파일 업로드 및 설정")
-    data_file = st.file_uploader("자료관리목록 엑셀 업로드", type=["xls", "xlsx"])
+    data_file = st.file_uploader("분기별 자료관리목록 엑셀파일을 업로드하세요", type=["xls", "xlsx"])
     target_region = st.selectbox("기준 지역 선택", CHUNGNAM_REGIONS, index=0)
 
 if data_file:

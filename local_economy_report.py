@@ -9,7 +9,62 @@ from io import BytesIO
 # ---------------------------------------------------------
 # 1. 환경 설정 및 상수
 # ---------------------------------------------------------
-st.set_page_config(page_title="지역경제활성화 실적 자동 집계", layout="wide")
+st.set_page_config(page_title="지역경제활성화 자동 집계 시스템", page_icon="📊", layout="wide")
+
+# --- 커스텀 CSS 디자인 주입 ---
+st.markdown("""
+<style>
+    /* 우측 상단 기본 메뉴 및 하단 로고 숨기기 */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* 전체 배경색 미세 조정 */
+    .stApp {
+        background-color: #f8fafc;
+    }
+    
+    /* 버튼 스타일 세련되게 변경 */
+    div.stButton > button {
+        background-color: #2563eb;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease 0s;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    div.stButton > button:hover {
+        background-color: #1d4ed8;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* 다운로드 버튼은 색상을 다르게(초록색 톤) */
+    div.stDownloadButton > button {
+        background-color: #059669;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        transition: all 0.3s ease 0s;
+    }
+    div.stDownloadButton > button:hover {
+        background-color: #047857;
+        transform: translateY(-2px);
+    }
+    
+    /* 메인 타이틀 디자인 */
+    .main-title {
+        color: #1e293b;
+        font-weight: 800;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #e2e8f0;
+        margin-bottom: 2rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 MY_G2B_API_KEY = "V%2FBFQCvaQlP%2F3ebvSQyuncyYbTzwqIxQ5yDO%2Fc%2FnX3YTRLd3ZZXxTeNhVd99xGMLoQOWLSwS7x%2BJ07aIn7Fk0w%3D%3D"
 API_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
@@ -43,12 +98,24 @@ def get_addr_api(biz_num, corp_name):
 # ---------------------------------------------------------
 # 3. 메인 UI
 # ---------------------------------------------------------
-st.title("📊 지역경제활성화 실적 자동 집계")
+st.markdown('<h1 class="main-title">📊 지역경제활성화 자동 집계 시스템</h1>', unsafe_allow_html=True)
+
+with st.expander("💡 시스템 사용 방법 안내 (클릭하여 열기)"):
+    st.markdown("""
+    1. 왼쪽 메뉴에서 **기준 지역**을 선택하고 **자료관리목록 엑셀**을 업로드합니다.
+    2. 데이터가 인식되면, **[1. 파일 내 자체 대조]** 버튼을 눌러 기존 데이터로 주소를 채웁니다.
+    3. 남은 빈칸은 **[2. 조달청 API 검색]** 버튼을 눌러 자동으로 채웁니다.
+    4. 자동화로도 찾아내지 못한 업체는 표를 통해 직접 입력 후 일괄 적용합니다.
+    5. 하단의 **결과물 다운로드** 버튼을 눌러 최종 서식을 받습니다.
+    """)
 
 with st.sidebar:
-    st.header("1. 파일 업로드 및 설정")
-    data_file = st.file_uploader("분기별 자료관리목록 엑셀파일을 업로드하세요", type=["xls", "xlsx"])
+    st.header("📂 1. 데이터 업로드")
     target_region = st.selectbox("기준 지역 선택", CHUNGNAM_REGIONS, index=0)
+    data_file = st.file_uploader("자료관리목록 엑셀 업로드", type=["xls", "xlsx"])
+    
+    st.markdown("---")
+    st.caption("개발: 천안버들유치원 나대현\n\n문의 및 오류 신고는 메신저로 부탁드립니다.")
 
 if data_file:
     if 'df' not in st.session_state:
@@ -56,35 +123,38 @@ if data_file:
     
     df = st.session_state.df
     
-    # 열 번호 고정 (금액: 6, 업체명: 16, 사업자번호: 18, 주소: 20)
     AMT_COL = 6
     COMP_COL = 16 
     BIZ_COL = 18
     ADDR_COL = 20
     
-    # 유효한 행 조건: 사업자번호 8자리 이상 & 가짜행 제외
     biz_col_data = df.iloc[:, BIZ_COL].astype(str).str.strip()
     is_valid_biz = (biz_col_data.str.len() >= 8) & (~biz_col_data.str.contains("Unnamed|nan|None", case=False, na=False))
     
-    # 기준 금액 조건 추가
     amt_data = pd.to_numeric(df.iloc[:, AMT_COL], errors='coerce').fillna(0)
     is_target_amt = amt_data >= TARGET_AMOUNT
     
-    # 최종 타겟 행 마스크 (유효한 사업자번호 AND 50만 원 이상)
     target_mask = is_valid_biz & is_target_amt
     total_target_rows = target_mask.sum()
     
-    # 누락 데이터 추출
     missing_mask = df.iloc[:, ADDR_COL].isna() | (df.iloc[:, ADDR_COL].astype(str).str.strip() == "") | (df.iloc[:, ADDR_COL].astype(str).str.strip() == "nan")
     missing_indices = df[missing_mask & target_mask].index
     missing_count = len(missing_indices)
     
-    st.markdown("---")
-    st.subheader("📍 주소 자동 채우기 진행 상황")
-    st.write(f"집계 대상(50만 원 이상) 데이터 **{total_target_rows}**건 중 주소 누락: **{missing_count}**건")
-
-    col1, col2 = st.columns(2)
+    # --- 대시보드 메트릭 영역 ---
+    st.subheader("📈 데이터 처리 현황")
+    met1, met2, met3 = st.columns(3)
+    met1.metric("업로드된 유효 데이터", f"{is_valid_biz.sum()}건")
+    met2.metric("집계 대상 (50만 원 이상)", f"{total_target_rows}건")
+    if missing_count > 0:
+        met3.metric("주소 누락 (조치 필요)", f"{missing_count}건", delta="-작업 필요", delta_color="inverse")
+    else:
+        met3.metric("주소 누락", "0건", delta="완벽함!", delta_color="normal")
     
+    st.markdown("---")
+    
+    # --- 버튼 영역 ---
+    col1, col2 = st.columns(2)
     with col1:
         if st.button("1️⃣ 파일 내 동일 사업자로 주소 채우기"):
             known_addrs = df.dropna(subset=[df.columns[ADDR_COL]]).set_index(df.columns[BIZ_COL])[df.columns[ADDR_COL]].to_dict()
@@ -110,12 +180,12 @@ if data_file:
 
     st.markdown("---")
     
+    # --- 수동 입력 영역 ---
     if missing_count > 0:
         missing_df = df.loc[missing_indices]
         unique_missing = missing_df.drop_duplicates(subset=[df.columns[BIZ_COL]])
         
-        st.warning(f"🚨 50만 원 이상 실적 중 아직 주소를 찾지 못한 고유 업체가 **{len(unique_missing)}곳** 있습니다. (총 누락 건수: {missing_count}건)")
-        st.info("💡 아래 표에서 주소를 한 번만 입력하시면, 중복된 모든 실적에 일괄 적용됩니다.")
+        st.warning(f"🚨 아직 주소를 찾지 못한 고유 업체가 **{len(unique_missing)}곳** 있습니다. 아래 표에서 주소를 입력해 주세요.")
         
         edit_data = {
             '업체명': unique_missing.iloc[:, COMP_COL].astype(str).replace('nan', '정보없음'),
@@ -158,8 +228,6 @@ if data_file:
         
     st.markdown("---")
     st.subheader("📥 최종 결과물 다운로드")
-    if missing_count > 0:
-        st.info("💡 주소가 완벽하지 않더라도 현재까지 작업된 내용으로 언제든 다운로드 및 집계가 가능합니다.")
         
     col3, col4 = st.columns(2)
     
@@ -207,16 +275,12 @@ if data_file:
                 wb = openpyxl.load_workbook(BytesIO(base64.b64decode(TEMPLATE_BASE64)))
                 ws = wb.active
                 
-                # ★ 병합된 셀(MergedCell) 에러를 피하는 스마트 텍스트 치환 방식 적용!
-                # 1행부터 4행(제목 및 헤더 영역) 사이에서 '천안'이라는 글자가 있으면 선택 지역으로 변경
                 for row in ws.iter_rows(min_row=1, max_row=4):
                     for cell in row:
-                        # 병합된 하위 셀은 건너뛰고 오직 진짜 셀(Cell)만 검사
                         if type(cell).__name__ != 'MergedCell':
                             if isinstance(cell.value, str) and "천안" in cell.value:
                                 cell.value = cell.value.replace("천안", target_region)
                 
-                # 집계 데이터 입력
                 ws['B5'] = results[('공사', 1)][0]; ws['B6'] = results[('공사', 1)][1]
                 ws['C5'] = results[('공사', 2)][0]; ws['C6'] = results[('공사', 2)][1]
                 ws['D5'] = results[('공사', 3)][0]; ws['D6'] = results[('공사', 3)][1]
@@ -241,3 +305,5 @@ if data_file:
                 )
             except Exception as e:
                 st.error(f"⚠️ 템플릿 로딩 중 오류가 발생했습니다: {e}")
+else:
+    st.info("👈 왼쪽 사이드바에서 자료관리목록 엑셀 파일을 업로드해 주세요.")

@@ -36,8 +36,11 @@ QUEUE_POLL_SECONDS = 5          # 대기 화면 자동 새로고침 주기
 @st.cache_resource
 def get_room_state():
     # 모든 세션이 공유하는 객체. active: {세션ID: 마지막 활동시각}
-    # waiting: {세션ID: 대기열 진입시각}
+    # waiting: {세션ID: (대기열 진입시각, 마지막으로 확인된 시각)}
     return {"active": {}, "waiting": {}}
+
+
+WAITING_STALE_SECONDS = QUEUE_POLL_SECONDS * 6  # 이 시간 이상 새로고침이 없으면 이탈한 것으로 간주
 
 
 def _acquire_slot() -> bool:
@@ -47,10 +50,16 @@ def _acquire_slot() -> bool:
     my_sid = st.session_state.session_id
 
     # 1) 오래(IDLE_TIMEOUT_SECONDS) 활동이 없는 활성 세션은 자동 퇴장 처리
-    expired = [sid for sid, t in room["active"].items()
-               if sid != my_sid and now - t > IDLE_TIMEOUT_SECONDS]
-    for sid in expired:
+    expired_active = [sid for sid, t in room["active"].items()
+                       if sid != my_sid and now - t > IDLE_TIMEOUT_SECONDS]
+    for sid in expired_active:
         del room["active"][sid]
+
+    # 1-1) 새로고침이 한동안 없었던 대기열 항목(탭을 닫고 떠난 경우)도 정리
+    stale_waiting = [sid for sid, (_, seen) in room["waiting"].items()
+                      if sid != my_sid and now - seen > WAITING_STALE_SECONDS]
+    for sid in stale_waiting:
+        del room["waiting"][sid]
 
     # 2) 나는 이미 활성 상태 → 활동시각만 갱신하고 통과
     if my_sid in room["active"]:
@@ -58,12 +67,14 @@ def _acquire_slot() -> bool:
         room["waiting"].pop(my_sid, None)
         return True
 
-    # 3) 아직 활성이 아니면 대기열에 등록(이미 있으면 그대로 유지 — 진입 순서 보존)
-    if my_sid not in room["waiting"]:
-        room["waiting"][my_sid] = now
+    # 3) 아직 활성이 아니면 대기열에 등록.
+    #    이미 등록돼 있으면 '진입 순서(joined)'는 그대로 두고 '마지막 확인 시각'만 갱신 —
+    #    그래야 5초마다 자동 새로고침돼도 줄 순서가 뒤로 밀리지 않는다.
+    joined = room["waiting"].get(my_sid, (now, now))[0]
+    room["waiting"][my_sid] = (joined, now)
 
-    # 4) 대기열 앞쪽부터, 남는 자리만큼 활성으로 승격
-    waiting_order = sorted(room["waiting"].items(), key=lambda x: x[1])
+    # 4) 대기열 앞쪽(진입이 빠른 순)부터, 남는 자리만큼 활성으로 승격
+    waiting_order = sorted(room["waiting"].items(), key=lambda x: x[1][0])
     free_slots = MAX_CONCURRENT - len(room["active"])
     for sid, _ in waiting_order[:max(free_slots, 0)]:
         room["active"][sid] = now
@@ -75,7 +86,7 @@ def _acquire_slot() -> bool:
 def _render_waiting_room():
     room = get_room_state()
     my_sid = st.session_state.session_id
-    waiting_order = sorted(room["waiting"].items(), key=lambda x: x[1])
+    waiting_order = sorted(room["waiting"].items(), key=lambda x: x[1][0])
     my_position = next((i for i, (sid, _) in enumerate(waiting_order) if sid == my_sid), None)
     position_txt = f"{my_position + 1}번째" if my_position is not None else "확인 중"
 
@@ -105,11 +116,18 @@ def _render_waiting_room():
     st.stop()
 
 
-# 세션 고유 ID 발급 (탭/브라우저별로 유지됨)
-if "session_id" not in st.session_state:
+# 세션 고유 ID — URL 쿼리 파라미터(?sid=...)에 저장해서 자동 새로고침으로 페이지가
+# 완전히 다시 로드되어도(= 새 웹소켓 연결 = 새 session_state) 같은 ID를 계속 쓰게 한다.
+# session_state에만 저장하면 새로고침마다 ID가 바뀌어 대기열 순서가 계속 초기화되는
+# 문제가 있었다.
+if "sid" in st.query_params:
+    st.session_state.session_id = st.query_params["sid"]
+else:
     st.session_state.session_id = str(uuid.uuid4())
+    st.query_params["sid"] = st.session_state.session_id
 
 if not _acquire_slot():
+
     _render_waiting_room()
 
 # ===========================================================

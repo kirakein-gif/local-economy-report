@@ -4,12 +4,113 @@ import openpyxl
 import requests
 import urllib.parse
 import base64
+import time
+import uuid
 from io import BytesIO
 
 # ---------------------------------------------------------
 # 1. 환경 설정 및 상수
 # ---------------------------------------------------------
 st.set_page_config(page_title="지역경제활성화 자동 집계 시스템", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+
+# ===========================================================
+# 0. 동시접속 제한 + 대기열
+# -----------------------------------------------------------
+# 무료 티어(Streamlit Community Cloud)의 공유 메모리 한도를 넘지 않도록
+# 동시 "활성 사용자"를 MAX_CONCURRENT 명으로 제한한다.
+# - st.cache_resource로 만든 객체는 이 앱을 쓰는 '모든' 세션이 공유한다
+#   (단, 서버 인스턴스가 1대일 때만 유효 — 여러 대로 복제하면 인스턴스마다
+#   따로 생기므로 실제 한도가 인스턴스 수만큼 늘어난다는 점은 알아두어야 함)
+# - 자리가 다 찼으면 대기열에 줄을 세우고, 화면이 몇 초마다 자동 새로고침
+#   되면서 "내 차례가 됐는지" 스스로 확인한다(서버가 밀어주는 방식이 아니라
+#   각자 화면이 주기적으로 다시 확인하는 방식 — Streamlit 자체엔 서버 푸시
+#   기능이 없어서 이렇게 구현하는 것이 무료 티어 안에서 가장 단순한 방법)
+# - IDLE_TIMEOUT 동안 아무 조작(재실행 트리거)이 없으면 자동으로 자리 반납
+# - "나가기" 버튼으로 즉시 자리 반납 가능
+# ===========================================================
+MAX_CONCURRENT = 10
+IDLE_TIMEOUT_SECONDS = 600      # 10분간 조작 없으면 자동 퇴장
+QUEUE_POLL_SECONDS = 5          # 대기 화면 자동 새로고침 주기
+
+
+@st.cache_resource
+def get_room_state():
+    # 모든 세션이 공유하는 객체. active: {세션ID: 마지막 활동시각}
+    # waiting: {세션ID: 대기열 진입시각}
+    return {"active": {}, "waiting": {}}
+
+
+def _acquire_slot() -> bool:
+    """이 세션이 앱을 사용할 수 있는 상태인지 확인/갱신하고, 사용 가능하면 True를 반환한다."""
+    room = get_room_state()
+    now = time.time()
+    my_sid = st.session_state.session_id
+
+    # 1) 오래(IDLE_TIMEOUT_SECONDS) 활동이 없는 활성 세션은 자동 퇴장 처리
+    expired = [sid for sid, t in room["active"].items()
+               if sid != my_sid and now - t > IDLE_TIMEOUT_SECONDS]
+    for sid in expired:
+        del room["active"][sid]
+
+    # 2) 나는 이미 활성 상태 → 활동시각만 갱신하고 통과
+    if my_sid in room["active"]:
+        room["active"][my_sid] = now
+        room["waiting"].pop(my_sid, None)
+        return True
+
+    # 3) 아직 활성이 아니면 대기열에 등록(이미 있으면 그대로 유지 — 진입 순서 보존)
+    if my_sid not in room["waiting"]:
+        room["waiting"][my_sid] = now
+
+    # 4) 대기열 앞쪽부터, 남는 자리만큼 활성으로 승격
+    waiting_order = sorted(room["waiting"].items(), key=lambda x: x[1])
+    free_slots = MAX_CONCURRENT - len(room["active"])
+    for sid, _ in waiting_order[:max(free_slots, 0)]:
+        room["active"][sid] = now
+        room["waiting"].pop(sid, None)
+
+    return my_sid in room["active"]
+
+
+def _render_waiting_room():
+    room = get_room_state()
+    my_sid = st.session_state.session_id
+    waiting_order = sorted(room["waiting"].items(), key=lambda x: x[1])
+    my_position = next((i for i, (sid, _) in enumerate(waiting_order) if sid == my_sid), None)
+    position_txt = f"{my_position + 1}번째" if my_position is not None else "확인 중"
+
+    st.markdown("""
+    <style>
+        body { font-family: 'Pretendard', -apple-system, sans-serif; }
+    </style>
+    <meta http-equiv="refresh" content="%d">
+    """ % QUEUE_POLL_SECONDS, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style="max-width:480px; margin:80px auto; text-align:center; padding:36px;
+                border:1px solid #E6E9EF; border-radius:16px; background:#fff;">
+        <div style="font-size:2rem; margin-bottom:12px;">⏳</div>
+        <div style="font-size:1.1rem; font-weight:700; color:#16203A; margin-bottom:8px;">
+            현재 사용자가 많아 대기 중입니다
+        </div>
+        <div style="color:#6B7280; font-size:0.9rem; margin-bottom:18px;">
+            대기 순번: <b>{position_txt}</b> · 자리가 나면 자동으로 접속됩니다.<br>
+            (화면이 {QUEUE_POLL_SECONDS}초마다 자동으로 새로고침됩니다 — 그냥 기다리시면 됩니다)
+        </div>
+        <div style="font-size:0.78rem; color:#93A2C4;">
+            최대 동시 사용자 {MAX_CONCURRENT}명 · 현재 사용 중 {len(room['active'])}명
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+
+# 세션 고유 ID 발급 (탭/브라우저별로 유지됨)
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+if not _acquire_slot():
+    _render_waiting_room()
 
 # ===========================================================
 # 디자인 시스템
@@ -427,6 +528,16 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# [사이드바 0단계] 접속 현황 + 나가기
+with st.sidebar:
+    _room = get_room_state()
+    st.caption(f"🟢 현재 사용 중 {len(_room['active'])}/{MAX_CONCURRENT}명 · 대기 {len(_room['waiting'])}명")
+    if st.button("🚪 나가기 (자리 반납)", width='stretch'):
+        _room["active"].pop(st.session_state.session_id, None)
+        st.success("자리를 반납했습니다. 페이지를 닫으셔도 됩니다.")
+        st.stop()
+    st.markdown("---")
+
 # [사이드바 1단계] 데이터 업로드
 with st.sidebar:
     st.header("📂 데이터 업로드")
@@ -541,6 +652,7 @@ if data_files:
             if missing_count == 0:
                 st.info("채울 주소가 없습니다.")
             else:
+                _room = get_room_state()
                 progress_bar = st.progress(0, text="조달청 서버 검색 중...")
                 filled_api = 0
                 for i, idx in enumerate(missing_indices):
@@ -548,6 +660,9 @@ if data_files:
                     if addr:
                         df.iat[idx, ADDR_COL] = addr
                         filled_api += 1
+                    # 오래 걸리는 작업 중에는 대기시간 만료로 자리를 뺏기지
+                    # 않도록 주기적으로 활동시각을 갱신한다.
+                    _room["active"][st.session_state.session_id] = time.time()
                     progress_bar.progress((i + 1) / len(missing_indices), text=f"{i+1}/{len(missing_indices)}건 완료")
                 st.session_state.df = df
                 st.rerun()

@@ -2,7 +2,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 from core_logic import (
-    CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, FALLBACK_COLS, SCHOOL_LEVELS,
+    CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, FALLBACK_COLS,
     file_fingerprint, find_source_col, load_excel_normalized,
     missing_address_mask, normalize_biz_no, normalize_contract_type,
 )
@@ -21,28 +21,18 @@ def prepare_mode1():
         else:
             target_amount = DEFAULT_TARGET_AMOUNT
             st.warning(f'숫자만 입력해 주세요. {DEFAULT_TARGET_AMOUNT:,}원을 사용합니다.')
+        st.caption('자료 집계에서는 기준 지역과 금액만 설정합니다.')
 
-        st.markdown('<div class="side-section side-gap">기관 정보</div>', unsafe_allow_html=True)
-        institution_name = st.text_input('기관명', value='천안버들유치원', key='institution_name')
-        school_level = st.selectbox('급별', SCHOOL_LEVELS, index=0, key='school_level')
+    # 반기 검토파일은 2026년 상반기 확정양식을 기본값으로 생성합니다.
+    # 최종작성 단계의 사이드바에서 반기 설정을 별도로 확인할 수 있습니다.
+    report_year = 2026
+    report_label = '상반기'
+    period_start = date(2026, 1, 1)
+    period_end = date(2026, 7, 31)
 
-        st.markdown('<div class="side-section side-gap">반기 검토파일 설정</div>', unsafe_allow_html=True)
-        report_year = int(st.number_input('보고연도', min_value=2020, max_value=2100, value=2026, step=1, key='report_year'))
-        report_label = st.selectbox('보고구분', ['상반기', '하반기'], index=0, key='report_label')
-        default_start = date(report_year, 1, 1) if report_label == '상반기' else date(report_year, 8, 1)
-        default_end = date(report_year, 7, 31) if report_label == '상반기' else date(report_year, 12, 31)
-        period_signature = f'{report_year}-{report_label}'
-        if st.session_state.get('_period_signature') != period_signature:
-            st.session_state['period_start'] = default_start
-            st.session_state['period_end'] = default_end
-            st.session_state['_period_signature'] = period_signature
-        period_start = st.date_input('기간 시작', key='period_start')
-        period_end = st.date_input('기간 종료', key='period_end')
-        st.caption('검토용 1-4 기초자료 제목과 최종 파일명에 반영됩니다.')
-
-    st.markdown('<div class="section-title compact-title">자료 입력</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title compact-title">▣ 자료 입력</div>', unsafe_allow_html=True)
     with st.container(border=True):
-        left, right = st.columns([2.2, 1], gap='medium')
+        left, right = st.columns([2.5, 1], gap='medium')
         with left:
             data_files = st.file_uploader(
                 '자료관리목록 Excel',
@@ -53,14 +43,14 @@ def prepare_mode1():
             )
         with right:
             st.markdown(
-                f'''<div class="mini-info"><b>{target_region}</b> 기준<br>{target_amount:,}원 이상<br>{institution_name}</div>''',
+                f'''<div class="mini-info"><span class="mini-label">기준 지역</span><b>{target_region}</b><br><span class="mini-label">집계 기준</span><b>{target_amount:,}원 이상</b></div>''',
                 unsafe_allow_html=True,
             )
         if data_files:
             st.caption(f'선택된 파일 {len(data_files)}개 · 여러 파일은 자동 합산됩니다.')
 
     if not data_files:
-        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">📂</div><div class="work-title">자료관리목록을 업로드해 주세요</div><div class="work-desc">왼쪽 설정을 확인한 뒤 위 영역에서 Excel 파일을 선택하세요.</div></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">▤</div><div class="work-title">자료관리목록을 업로드해 주세요</div><div class="work-desc">왼쪽에서 기준 지역과 금액을 설정한 뒤 Excel 파일을 선택하세요.</div></div>''', unsafe_allow_html=True)
         st.stop()
 
     fingerprint = file_fingerprint(data_files)

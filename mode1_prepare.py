@@ -31,8 +31,13 @@ def prepare_mode1():
         report_label = st.selectbox('보고구분', ['상반기', '하반기'], index=0, key='report_label')
         default_start = date(report_year, 1, 1) if report_label == '상반기' else date(report_year, 8, 1)
         default_end = date(report_year, 7, 31) if report_label == '상반기' else date(report_year, 12, 31)
-        period_start = st.date_input('기간 시작', value=st.session_state.get('period_start', default_start), key='period_start')
-        period_end = st.date_input('기간 종료', value=st.session_state.get('period_end', default_end), key='period_end')
+        period_signature = f'{report_year}-{report_label}'
+        if st.session_state.get('_period_signature') != period_signature:
+            st.session_state['period_start'] = default_start
+            st.session_state['period_end'] = default_end
+            st.session_state['_period_signature'] = period_signature
+        period_start = st.date_input('기간 시작', key='period_start')
+        period_end = st.date_input('기간 종료', key='period_end')
         st.caption('검토용 1-4 기초자료 제목과 최종 파일명에 반영됩니다.')
 
     st.markdown('<div class="section-title compact-title">자료 입력</div>', unsafe_allow_html=True)

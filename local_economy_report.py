@@ -4,6 +4,9 @@ from ui_style import APP_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
+APP_VERSION = "1.3.0"
+DEPLOY_DATE = "2026.09.03"
+
 st.set_page_config(
     page_title="지역경제활성화 자동 집계 시스템",
     page_icon="📊",
@@ -54,7 +57,7 @@ with st.sidebar:
 active_count, waiting_count, _ = waiting_status()
 mode_caption = "자료관리목록 정제 · 주소 보완 · 분기보고서 · 반기 검토파일" if mode.startswith("자료") else "검토 완료 기초자료 재업로드 · 최종 4시트 보고서"
 st.markdown(
-    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">▦</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">{mode_caption}</div></div></div><div class="live-chip">사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
+    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">▦</div><div><div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><div class="app-title">지역경제활성화 자동 집계</div><span style="font-size:.68rem;font-weight:650;color:#98A2B3;white-space:nowrap">v{APP_VERSION} · 배포 {DEPLOY_DATE}</span></div><div class="app-sub">{mode_caption}</div></div></div><div class="live-chip">사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
     unsafe_allow_html=True,
 )
 

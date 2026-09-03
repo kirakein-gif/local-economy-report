@@ -3,10 +3,10 @@ from datetime import date
 
 import streamlit as st
 import excel_reports as reports
-from template_fallback import load_halfyear_template_safe
+from official_template import load_official_halfyear_template
 
-# 최종보고서 생성도 템플릿이 손상되면 자동 복구합니다.
-reports._load_halfyear_template = lambda: load_halfyear_template_safe(reports.HALFYEAR_TEMPLATE)
+# 최종보고서도 사용자가 제공한 확정 양식을 그대로 복원해 사용합니다.
+reports._load_halfyear_template = load_official_halfyear_template
 
 
 def _detect_year_half(title):
@@ -34,21 +34,24 @@ def render_mode2():
             default_start, default_end = date(report_year, 8, 1), date(report_year, 12, 31)
         st.date_input('기간 시작', value=default_start, key='final_period_start')
         st.date_input('기간 종료', value=default_end, key='final_period_end')
-        st.caption('검토파일의 실제 값이 우선이며, 이 설정은 확인용입니다.')
+        st.caption('최종 집계는 검토파일의 사용자 수정값을 우선 사용합니다.')
 
-    st.markdown('<div class="section-title compact-title">📤 검토 완료 파일 업로드</div>', unsafe_allow_html=True)
-    with st.container(border=True):
-        review_upload = st.file_uploader(
-            '검토 완료 1-4 기초자료',
-            type=['xlsx'],
-            accept_multiple_files=False,
-            key='review_upload',
-            label_visibility='collapsed',
-        )
-        st.caption('1차에서 내려받아 검토·수정한 파일을 올려주세요. 사용자 수정값을 그대로 집계합니다.')
+    st.markdown('<div class="section-title compact-title">검토 완료 파일</div>', unsafe_allow_html=True)
+    up1, up2 = st.columns([2.35, 1], gap='small')
+    with up1:
+        with st.container(border=True):
+            review_upload = st.file_uploader(
+                '검토 완료 1-4 기초자료',
+                type=['xlsx'],
+                accept_multiple_files=False,
+                key='review_upload',
+                label_visibility='collapsed',
+            )
+    with up2:
+        st.markdown('''<div class="mini-info upload-guide"><span class="mini-label">처리 방식</span><b>사용자 수정값 우선</b><br><span class="mini-label">출력 파일</span><b>확정 4시트 양식</b></div>''', unsafe_allow_html=True)
 
     if not review_upload:
-        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">📝</div><div class="work-title">검토 완료 파일을 기다리고 있습니다</div><div class="work-desc">업로드하면 공사 · 용역 · 물품 · 기초자료 4개 시트를 자동 작성합니다.</div></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">▤</div><div class="work-title">검토 완료 파일을 업로드해 주세요</div><div class="work-desc">1차에서 내려받은 1-4 기초자료를 수정한 뒤 다시 올리면 최종 보고서를 작성합니다.</div></div>''', unsafe_allow_html=True)
         return
 
     try:
@@ -70,30 +73,37 @@ def render_mode2():
             st.caption(f'기관명: {meta.get("institution", "") or "미입력"}')
             st.caption(f'기준지역: {meta.get("region", "") or "미입력"}')
 
-        st.markdown(
-            f'''<div class="kpi-row compact-kpi"><div class="kpi-card"><div class="kpi-label">기초자료</div><div class="kpi-value">{total:,}<span class="kpi-unit">건</span></div></div><div class="kpi-card"><div class="kpi-label">목적물 구성</div><div class="kpi-value small-value">공사 {works} · 용역 {services} · 물품 {goods}</div></div><div class="kpi-card"><div class="kpi-label">물품 구입목적</div><div class="kpi-value small-value">교육용 {edu_count} · 도서 {book_count}</div></div></div>''',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="section-title compact-title">처리 결과</div>', unsafe_allow_html=True)
+        result_col, download_col = st.columns([2.35, 1], gap='small')
 
-        notes = []
-        if meta['blank_purpose']:
-            notes.append(f"구입목적 미입력 {meta['blank_purpose']}건 → 그 외")
-        if meta['invalid_purpose']:
-            notes.append(f"정의되지 않은 구입목적 {meta['invalid_purpose']}건 → 그 외")
-        if meta['corrected_location']:
-            notes.append(f"소재지 보정 {meta['corrected_location']}건")
-        if notes:
-            st.warning(' · '.join(notes))
-        else:
-            st.success('검토파일 구조와 분류값을 정상적으로 확인했습니다.')
+        with result_col:
+            st.markdown(
+                f'''<div class="kpi-row compact-kpi"><div class="kpi-card"><div class="kpi-label">기초자료</div><div class="kpi-value">{total:,}<span class="kpi-unit">건</span></div></div><div class="kpi-card"><div class="kpi-label">목적물 구성</div><div class="kpi-value small-value">공사 {works} · 용역 {services} · 물품 {goods}</div></div><div class="kpi-card"><div class="kpi-label">물품 구입목적</div><div class="kpi-value small-value">교육용 {edu_count} · 도서 {book_count}</div></div></div>''',
+                unsafe_allow_html=True,
+            )
+            notes = []
+            if meta['blank_purpose']:
+                notes.append(f"구입목적 미입력 {meta['blank_purpose']}건 → 그 외")
+            if meta['invalid_purpose']:
+                notes.append(f"정의되지 않은 구입목적 {meta['invalid_purpose']}건 → 그 외")
+            if meta['corrected_location']:
+                notes.append(f"소재지 보정 {meta['corrected_location']}건")
+            if notes:
+                st.warning(' · '.join(notes))
+            else:
+                st.success('검토파일 구조와 분류값을 정상적으로 확인했습니다.')
 
-        st.download_button(
-            '최종 반기보고서 다운로드',
-            final_bytes,
-            final_name,
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            width='stretch',
-        )
-        st.caption(f'4시트 보고서 · 파일명: {final_name}')
+        with download_col:
+            with st.container(border=True):
+                st.markdown('''<div class="download-side-head"><div class="small-file-icon green-file">↓</div><div><div class="card-title">최종 반기보고서</div><div class="card-desc no-margin">확정 양식 4개 시트</div></div></div>''', unsafe_allow_html=True)
+                st.markdown(f'<div class="file-name-box">{final_name}</div>', unsafe_allow_html=True)
+                st.download_button(
+                    '최종 보고서 다운로드',
+                    final_bytes,
+                    final_name,
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    width='stretch',
+                    key='final_halfyear_download',
+                )
     except Exception as exc:
         st.error(f'검토파일을 처리하지 못했습니다: {exc}')

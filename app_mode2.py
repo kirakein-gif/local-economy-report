@@ -1,9 +1,10 @@
 import streamlit as st
 from core_logic import release_slot
 import excel_reports as reports
-from template_fallback import load_halfyear_template_safe
+from template_fallback import build_fallback_workbook
 
-reports._load_halfyear_template = lambda: load_halfyear_template_safe(reports.HALFYEAR_TEMPLATE)
+# 최종 반기보고서도 손상될 수 있는 저장소 xlsx를 열지 않고 내장 템플릿을 사용합니다.
+reports._load_halfyear_template = build_fallback_workbook
 
 
 def render_mode2():

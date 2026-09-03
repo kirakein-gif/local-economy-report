@@ -5,6 +5,10 @@ from openpyxl import load_workbook
 
 from core_logic import categorize_region_code, format_money, safe_value
 import excel_reports as reports
+from template_fallback import load_halfyear_template_safe
+
+# 배포 과정에서 xlsx 바이너리가 손상되면 내장 양식으로 자동 복구합니다.
+reports._load_halfyear_template = lambda: load_halfyear_template_safe(reports.HALFYEAR_TEMPLATE)
 
 OFFICIAL_GUIDE = "◑에듀파인-계약목록 내려받기 후(①2025년회계2026.1월~2월,② 2026년회계3월~7월)→목록 정리(공공요금, 수수료 등삭제)→ 엑셀.net 활용(파일 올리기)"
 
@@ -48,7 +52,7 @@ def render_mode1_outputs(ctx):
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div class="section-title compact-title">결과 다운로드</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title compact-title">📥 결과 다운로드</div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2, gap='medium')
     with col1:
         try:
@@ -71,8 +75,8 @@ def render_mode1_outputs(ctx):
                 ctx['headers'],
                 ctx['target_amount'],
                 target_region,
-                ctx['institution_name'].strip(),
-                ctx['school_level'],
+                '',
+                '',
                 ctx['report_year'],
                 ctx['report_label'],
                 ctx['period_start'],
@@ -80,14 +84,13 @@ def render_mode1_outputs(ctx):
             )
             b = _restore_official_review_header(b)
             half = _short_half(ctx['report_label'])
-            inst = ctx['institution_name'].strip().replace('/', '_').replace('\\', '_')
             st.download_button(
                 '반기 검토용 기초자료 다운로드',
                 b,
-                f'지역경제활성화_{ctx["report_year"]}{half}_{inst}_검토용.xlsx',
+                f'지역경제활성화_{ctx["report_year"]}{half}_검토용.xlsx',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 width='stretch',
             )
-            st.caption(f'확정 1-4 양식 · {n:,}건 · 검토 후 왼쪽 메뉴에서 최종작성 선택')
+            st.caption(f'1-4 기초자료 · {n:,}건 · 검토 후 최종작성에서 재업로드')
         except Exception as exc:
             st.error(f'검토용 파일 생성 오류: {exc}')

@@ -2,7 +2,8 @@ import urllib.parse
 
 import pandas as pd
 import streamlit as st
-from core_logic import get_addr_api, missing_address_mask, touch_slot
+from address_api import get_address_from_public_apis
+from core_logic import missing_address_mask, touch_slot
 
 
 def _bizno_url(biz):
@@ -54,24 +55,40 @@ def render_address_tools(ctx):
     a1, a2 = st.columns([1, 1.15], gap='small')
 
     with a1:
-        if st.button('조달청 주소 찾기', width='stretch'):
+        if st.button('API 주소 찾기', width='stretch'):
             unique_biz = [x for x in biz_norm.loc[api_missing_indices].drop_duplicates().tolist() if x]
             if not unique_biz:
                 st.info('사업자번호로 조회할 주소가 없습니다.')
             else:
-                progress = st.progress(0, text='조달청 주소 조회 중...')
+                progress = st.progress(0, text='공공데이터 API 주소 조회 중...')
+                found_procurement = 0
+                found_ftc = 0
                 for i, biz in enumerate(unique_biz):
-                    addr = get_addr_api(biz)
+                    addr, source = get_address_from_public_apis(biz)
                     if addr:
                         mask = biz_norm.eq(biz) & missing_address_mask(df.iloc[:, col_addr])
                         df.loc[mask, df.columns[col_addr]] = addr
+                        if source == '나라장터':
+                            found_procurement += 1
+                        elif source == '공정위 통신판매사업자':
+                            found_ftc += 1
                     touch_slot()
-                    progress.progress((i + 1) / len(unique_biz), text=f'{i+1}/{len(unique_biz)}개 업체 조회')
-                # API로 새 주소가 확인되면 같은 사업자번호의 빈 주소에만 자동 반영합니다.
+                    progress.progress(
+                        (i + 1) / len(unique_biz),
+                        text=f'{i+1}/{len(unique_biz)}개 업체 조회 · 나라장터 → 공정위 통신판매사업자',
+                    )
                 _propagate_known_addresses(df, col_addr, biz_norm)
                 st.session_state.df = df
+                st.session_state.address_api_result = {
+                    '나라장터': found_procurement,
+                    '공정위 통신판매사업자': found_ftc,
+                }
                 st.rerun()
-        st.caption('주소 없는 업체만 나라장터 API 조회 · 동일 사업자번호에만 자동 반영')
+        st.caption('주소 없는 업체만 나라장터 → 공정위 통신판매사업자 순으로 조회 · 사업자번호 정확일치만 반영')
+        result = st.session_state.pop('address_api_result', None)
+        if result:
+            total = result['나라장터'] + result['공정위 통신판매사업자']
+            st.caption(f'최근 조회: {total}개 확인 · 나라장터 {result["나라장터"]}개 · 공정위 {result["공정위 통신판매사업자"]}개')
 
     with a2:
         if missing_count:
@@ -85,8 +102,6 @@ def render_address_tools(ctx):
         for idx in missing_indices:
             biz = str(biz_norm.at[idx] or '').strip()
             company = str(df.iat[idx, col_company] if pd.notna(df.iat[idx, col_company]) else '').strip()
-            # 유효한 사업자번호가 있으면 사업자번호별 1행만 표시합니다.
-            # 사업자번호가 없거나 비정상이면 자동 전파하지 않으므로 각 원본 행을 개별 표시합니다.
             key = ('biz', biz) if len(biz) == 10 else ('row', idx)
             if key in seen:
                 continue
@@ -127,7 +142,6 @@ def render_address_tools(ctx):
                         mask = biz_norm.eq(biz)
                         df.loc[mask, df.columns[col_addr]] = new_addr
                     else:
-                        # 사업자번호가 없거나 비정상이면 해당 행에만 적용합니다.
                         df.iat[idx, col_addr] = new_addr
                     applied += 1
                 if applied:

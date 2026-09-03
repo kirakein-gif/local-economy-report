@@ -23,8 +23,6 @@ def prepare_mode1():
             st.warning(f'숫자만 입력해 주세요. {DEFAULT_TARGET_AMOUNT:,}원을 사용합니다.')
         st.caption('자료 집계에서는 기준 지역과 금액만 설정합니다.')
 
-    # 반기 검토파일은 2026년 상반기 확정양식을 기본값으로 생성합니다.
-    # 최종작성 단계의 사이드바에서 반기 설정을 별도로 확인할 수 있습니다.
     report_year = 2026
     report_label = '상반기'
     period_start = date(2026, 1, 1)
@@ -50,7 +48,7 @@ def prepare_mode1():
             st.caption(f'선택된 파일 {len(data_files)}개 · 여러 파일은 자동 합산됩니다.')
 
     if not data_files:
-        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">▤</div><div class="work-title">자료관리목록을 업로드해 주세요</div><div class="work-desc">왼쪽에서 기준 지역과 금액을 설정한 뒤 Excel 파일을 선택하세요.</div></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">▤</div><div class="work-title">자료관리목록을 업로드해 주세요</div><div class="work-desc">왼쪽에서 기준 지역과 금액을 설정한 뒤 Excel 파일을 선택하세요.<br><span style="color:#475467;font-weight:650">학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리</span>에서 내려받으시면 됩니다.</div></div>''', unsafe_allow_html=True)
         st.stop()
 
     fingerprint = file_fingerprint(data_files)

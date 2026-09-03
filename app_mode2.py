@@ -1,6 +1,12 @@
 import re
+from datetime import date
+
 import streamlit as st
 import excel_reports as reports
+from template_fallback import load_halfyear_template_safe
+
+# 최종보고서 생성도 템플릿이 손상되면 자동 복구합니다.
+reports._load_halfyear_template = lambda: load_halfyear_template_safe(reports.HALFYEAR_TEMPLATE)
 
 
 def _detect_year_half(title):
@@ -19,11 +25,18 @@ def _safe_filename_text(value):
 
 def render_mode2():
     with st.sidebar:
-        st.markdown('<div class="side-section">최종작성 방식</div>', unsafe_allow_html=True)
-        st.caption('연도 · 반기구분 · 기관명 · 지역은 검토 완료한 1-4 기초자료에서 자동으로 읽습니다.')
-        st.caption('사용자가 수정한 계약방법·견적/경쟁방법·구입목적을 그대로 최종값으로 사용합니다.')
+        st.markdown('<div class="side-section side-gap">반기보고서 설정</div>', unsafe_allow_html=True)
+        report_year = int(st.number_input('보고연도', min_value=2020, max_value=2100, value=2026, step=1, key='final_report_year'))
+        report_label = st.selectbox('보고구분', ['상반기', '하반기'], key='final_report_label')
+        if report_label == '상반기':
+            default_start, default_end = date(report_year, 1, 1), date(report_year, 7, 31)
+        else:
+            default_start, default_end = date(report_year, 8, 1), date(report_year, 12, 31)
+        st.date_input('기간 시작', value=default_start, key='final_period_start')
+        st.date_input('기간 종료', value=default_end, key='final_period_end')
+        st.caption('검토파일의 실제 값이 우선이며, 이 설정은 확인용입니다.')
 
-    st.markdown('<div class="section-title compact-title">검토 완료 파일 업로드</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title compact-title">📤 검토 완료 파일 업로드</div>', unsafe_allow_html=True)
     with st.container(border=True):
         review_upload = st.file_uploader(
             '검토 완료 1-4 기초자료',
@@ -32,10 +45,10 @@ def render_mode2():
             key='review_upload',
             label_visibility='collapsed',
         )
-        st.caption('1차에서 내려받아 검토·수정한 파일을 올려주세요. 자동분류를 다시 덮어쓰지 않습니다.')
+        st.caption('1차에서 내려받아 검토·수정한 파일을 올려주세요. 사용자 수정값을 그대로 집계합니다.')
 
     if not review_upload:
-        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">📝</div><div class="work-title">검토 완료 파일을 기다리고 있습니다</div><div class="work-desc">업로드하면 확정 양식의 1-1 공사 · 1-2 용역 · 1-3 물품 · 1-4 기초자료를 자동 작성합니다.</div></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">📝</div><div class="work-title">검토 완료 파일을 기다리고 있습니다</div><div class="work-desc">업로드하면 공사 · 용역 · 물품 · 기초자료 4개 시트를 자동 작성합니다.</div></div>''', unsafe_allow_html=True)
         return
 
     try:
@@ -81,6 +94,6 @@ def render_mode2():
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             width='stretch',
         )
-        st.caption(f'확정 4시트 양식 · 파일명: {final_name}')
+        st.caption(f'4시트 보고서 · 파일명: {final_name}')
     except Exception as exc:
         st.error(f'검토파일을 처리하지 못했습니다: {exc}')

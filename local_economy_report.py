@@ -11,6 +11,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
+# GitHub/source 개발자 툴바는 숨기되 사이드바 재열기 버튼은 유지합니다.
+st.markdown('<style>[data-testid="stToolbar"]{display:none!important}</style>', unsafe_allow_html=True)
 
 
 def render_waiting_room():

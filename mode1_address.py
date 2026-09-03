@@ -1,6 +1,15 @@
+import urllib.parse
+
 import pandas as pd
 import streamlit as st
 from core_logic import get_addr_api, missing_address_mask, touch_slot
+
+
+def _bizno_url(biz):
+    biz = str(biz or '').strip()
+    if not biz or biz == '확인불가':
+        return 'https://bizno.net/'
+    return 'https://bizno.net/?query=' + urllib.parse.quote(biz)
 
 
 def render_address_tools(ctx):
@@ -13,7 +22,7 @@ def render_address_tools(ctx):
     missing_count = ctx['missing_count']
 
     st.markdown('<div class="section-title compact-title">주소 보완</div>', unsafe_allow_html=True)
-    a1, a2, a3 = st.columns([1, 1, 1.35], gap='small')
+    a1, a2, a3 = st.columns([1, 1, 1.15], gap='small')
     with a1:
         if st.button('① 파일 내 주소 채우기', width='stretch'):
             addr_series = df.iloc[:, col_addr].replace(r'^\s*$', pd.NA, regex=True)
@@ -24,7 +33,7 @@ def render_address_tools(ctx):
             df.loc[miss, df.columns[col_addr]] = fills[miss]
             st.session_state.df = df
             st.rerun()
-        st.caption('같은 사업자번호의 기존 주소 재사용')
+        st.caption('동일 사업자번호의 기존 주소 재사용')
 
     with a2:
         if st.button('② 조달청 주소 찾기', width='stretch'):
@@ -42,11 +51,11 @@ def render_address_tools(ctx):
                     progress.progress((i + 1) / len(unique_biz), text=f'{i+1}/{len(unique_biz)}개 업체 조회')
                 st.session_state.df = df
                 st.rerun()
-        st.caption('주소 없는 고유 사업자번호만 API 조회')
+        st.caption('주소 없는 업체만 나라장터 API 조회')
 
     with a3:
         if missing_count:
-            st.markdown(f'<div class="mini-status warn-mini"><b>주소 미확인 {missing_count}건</b><br>미확인은 타시도로 임시 반영됩니다.</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="mini-status warn-mini"><b>주소 미확인 {missing_count}건</b><br>미확인은 타시도로 임시 반영</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="mini-status ok-mini"><b>주소 확인 완료</b><br>{ctx["target_amount"]:,}원 이상 집계대상</div>', unsafe_allow_html=True)
 
@@ -60,20 +69,32 @@ def render_address_tools(ctx):
             if key in seen:
                 continue
             seen.add(key)
-            rows.append({'_source_idx': idx, '업체명': company or '정보없음', '사업자번호': biz or '확인불가', '주소 수동 입력': ''})
+            biz_display = biz or '확인불가'
+            rows.append({
+                '_source_idx': idx,
+                '업체명': company or '정보없음',
+                '사업자번호': biz_display,
+                'Bizno 조회': _bizno_url(biz_display),
+                '주소 수동 입력': '',
+            })
 
         edit_df = pd.DataFrame(rows).set_index('_source_idx')
-        with st.expander(f'주소 수동 입력 · {len(edit_df)}개 업체/건', expanded=False):
-            st.caption('필요한 항목만 입력하세요. 입력하지 않아도 보고서 생성은 가능합니다.')
+        with st.expander(f'주소 미확인 업체 확인 · {len(edit_df)}개', expanded=False):
+            st.caption('Bizno 조회를 눌러 사업자번호로 업체 주소를 확인한 뒤 필요한 주소만 입력하세요. 미입력 상태에서도 보고서 생성은 가능합니다.')
             edited = st.data_editor(
                 edit_df,
-                disabled=['업체명', '사업자번호'],
-                column_config={'주소 수동 입력': st.column_config.TextColumn('주소 입력')},
+                disabled=['업체명', '사업자번호', 'Bizno 조회'],
+                column_config={
+                    '업체명': st.column_config.TextColumn('업체명', width='medium'),
+                    '사업자번호': st.column_config.TextColumn('사업자번호', width='small'),
+                    'Bizno 조회': st.column_config.LinkColumn('Bizno 조회', display_text='조회하기', width='small'),
+                    '주소 수동 입력': st.column_config.TextColumn('주소 입력', width='large'),
+                },
                 width='stretch',
-                height=min(340, 86 + max(1, min(len(edit_df), 8)) * 34),
+                height=min(360, 90 + max(1, min(len(edit_df), 8)) * 35),
                 key='manual_address_editor',
             )
-            if st.button('입력한 주소 일괄 적용', key='apply_manual_address'):
+            if st.button('입력한 주소 적용', key='apply_manual_address'):
                 applied = 0
                 for idx in edited.index:
                     new_addr = str(edited.at[idx, '주소 수동 입력'] or '').strip()

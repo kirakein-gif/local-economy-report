@@ -54,11 +54,11 @@ def render_mode1_outputs(ctx):
         )
 
     st.markdown('<div class="section-title compact-title">결과 파일</div>', unsafe_allow_html=True)
-    col1, col2 = st.columns(2, gap='small')
+    col1, col2, col3 = st.columns(3, gap='small')
 
     with col1:
         with st.container(border=True):
-            h1, h2 = st.columns([0.18, 0.82], gap='small')
+            h1, h2 = st.columns([0.2, 0.8], gap='small')
             with h1:
                 st.markdown('<div class="small-file-icon">▤</div>', unsafe_allow_html=True)
             with h2:
@@ -74,7 +74,7 @@ def render_mode1_outputs(ctx):
 
     with col2:
         with st.container(border=True):
-            h1, h2 = st.columns([0.18, 0.82], gap='small')
+            h1, h2 = st.columns([0.2, 0.8], gap='small')
             with h1:
                 st.markdown('<div class="small-file-icon green-file">✓</div>', unsafe_allow_html=True)
             with h2:
@@ -96,3 +96,15 @@ def render_mode1_outputs(ctx):
                 )
             except Exception as exc:
                 st.error(f'검토용 파일 생성 오류: {exc}')
+
+    with col3:
+        with st.container(border=True):
+            h1, h2 = st.columns([0.2, 0.8], gap='small')
+            with h1:
+                st.markdown('<div class="small-file-icon">→</div>', unsafe_allow_html=True)
+            with h2:
+                st.markdown(
+                    '<div class="card-title">다음 단계</div><div class="card-desc no-margin">검토용 파일 확인 후 사이드바의 반기보고서 최종작성으로 이동</div>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown('<div class="mini-info"><span class="mini-label">진행 순서</span><b>검토 → 수정 → 재업로드</b><br><span class="mini-label">최종 결과</span><b>확정 4시트 보고서</b></div>', unsafe_allow_html=True)

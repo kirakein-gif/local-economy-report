@@ -1,11 +1,25 @@
+from io import BytesIO
+
 import streamlit as st
+from openpyxl import load_workbook
+
 from core_logic import categorize_region_code, format_money, safe_value
 import excel_reports as reports
-from template_fallback import build_fallback_workbook
 
-# 반기 검토파일은 GitHub의 바이너리 xlsx를 직접 열지 않습니다.
-# 배포 과정의 바이너리 손상과 무관하게 내장 4시트 템플릿을 메모리에서 생성합니다.
-reports._load_halfyear_template = build_fallback_workbook
+OFFICIAL_GUIDE = "◑에듀파인-계약목록 내려받기 후(①2025년회계2026.1월~2월,② 2026년회계3월~7월)→목록 정리(공공요금, 수수료 등삭제)→ 엑셀.net 활용(파일 올리기)"
+
+
+def _restore_official_review_header(file_bytes):
+    wb = load_workbook(BytesIO(file_bytes))
+    ws = wb[reports.REVIEW_SHEET]
+    ws['A4'] = OFFICIAL_GUIDE
+    ws['J4'] = '지역경제활성화 자동 집계 시스템 · Streamlit'
+    out = BytesIO(); wb.save(out)
+    return out.getvalue()
+
+
+def _short_half(label):
+    return '상' if str(label).startswith('상') else ('하' if str(label).startswith('하') else str(label))
 
 
 def render_mode1_outputs(ctx):
@@ -30,14 +44,13 @@ def render_mode1_outputs(ctx):
         amounts = [sum(results[t, loc][1] for t in ['공사', '용역', '물품']) for loc in [1, 2, 3]]
         pct = [round(x / total * 100, 1) for x in amounts]
         st.markdown(
-            f'''<div class="region-card"><div class="work-title">지역별 구매 금액 비중</div><div class="region-track"><div class="region-seg-1" style="width:{pct[0]}%"></div><div class="region-seg-2" style="width:{pct[1]}%"></div><div class="region-seg-3" style="width:{pct[2]}%"></div></div><div class="region-legend"><span>{target_region} {pct[0]}%</span><span>충남 관외 {pct[1]}%</span><span>타시도 {pct[2]}%</span></div></div>''',
+            f'''<div class="region-card compact-region"><div class="work-title">지역별 구매 금액 비중</div><div class="region-track"><div class="region-seg-1" style="width:{pct[0]}%"></div><div class="region-seg-2" style="width:{pct[1]}%"></div><div class="region-seg-3" style="width:{pct[2]}%"></div></div><div class="region-legend"><span>{target_region} {pct[0]}%</span><span>충남 관외 {pct[1]}%</span><span>타시도 {pct[2]}%</span></div></div>''',
             unsafe_allow_html=True,
         )
 
-    st.markdown('''<div class="section-title">처리 결과 및 파일 다운로드</div>''', unsafe_allow_html=True)
-    col1, col2 = st.columns(2, gap='large')
+    st.markdown('<div class="section-title compact-title">결과 다운로드</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2, gap='medium')
     with col1:
-        st.markdown('''<div class="download-card"><div class="download-icon">📄</div><div><div class="work-title">분기별 실적보고서</div><div class="work-desc">현재 사용 중인 분기 제출서식을 그대로 생성합니다.</div></div></div>''', unsafe_allow_html=True)
         try:
             q = reports.build_quarter_report_bytes(results, target_region)
             st.download_button(
@@ -47,11 +60,11 @@ def render_mode1_outputs(ctx):
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 width='stretch',
             )
+            st.caption('현재 사용 중인 분기 제출서식')
         except Exception as exc:
             st.error(f'분기보고서 생성 오류: {exc}')
 
     with col2:
-        st.markdown('''<div class="download-card"><div class="download-icon">📝</div><div><div class="work-title">반기보고서 검토용 기초자료</div><div class="work-desc">1-4 기초자료 형식으로 내려받아 계약방법·견적방법·구입목적 등을 검토합니다.</div></div></div>''', unsafe_allow_html=True)
         try:
             b, n, _ = reports.build_review_workbook_bytes(
                 df,
@@ -61,17 +74,20 @@ def render_mode1_outputs(ctx):
                 ctx['institution_name'].strip(),
                 ctx['school_level'],
                 ctx['report_year'],
-                ctx['report_label'].strip() or '반기',
+                ctx['report_label'],
                 ctx['period_start'],
                 ctx['period_end'],
             )
+            b = _restore_official_review_header(b)
+            half = _short_half(ctx['report_label'])
+            inst = ctx['institution_name'].strip().replace('/', '_').replace('\\', '_')
             st.download_button(
                 '반기 검토용 기초자료 다운로드',
                 b,
-                f'지역경제활성화_{ctx["report_year"]}{ctx["report_label"]}_검토용기초자료.xlsx',
+                f'지역경제활성화_{ctx["report_year"]}{half}_{inst}_검토용.xlsx',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 width='stretch',
             )
-            st.caption(f'1-4 기초자료 형식 · {n:,}건 · Excel에서 최종 검토 후 2차 업무에 다시 업로드')
+            st.caption(f'확정 1-4 양식 · {n:,}건 · 검토 후 왼쪽 메뉴에서 최종작성 선택')
         except Exception as exc:
             st.error(f'검토용 파일 생성 오류: {exc}')

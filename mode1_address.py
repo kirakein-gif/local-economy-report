@@ -63,6 +63,7 @@ def render_address_tools(ctx):
                 progress = st.progress(0, text='공공데이터 API 주소 조회 중...')
                 found_procurement = 0
                 found_ftc = 0
+                found_local = 0
                 for i, biz in enumerate(unique_biz):
                     addr, source = get_address_from_public_apis(biz)
                     if addr:
@@ -72,23 +73,30 @@ def render_address_tools(ctx):
                             found_procurement += 1
                         elif source == '공정위 통신판매사업자':
                             found_ftc += 1
+                        elif source == '지역화폐 가맹점':
+                            found_local += 1
                     touch_slot()
                     progress.progress(
                         (i + 1) / len(unique_biz),
-                        text=f'{i+1}/{len(unique_biz)}개 업체 조회 · 나라장터 → 공정위 통신판매사업자',
+                        text=f'{i+1}/{len(unique_biz)}개 업체 조회 · 나라장터 → 공정위 → 지역화폐',
                     )
                 _propagate_known_addresses(df, col_addr, biz_norm)
                 st.session_state.df = df
                 st.session_state.address_api_result = {
                     '나라장터': found_procurement,
                     '공정위 통신판매사업자': found_ftc,
+                    '지역화폐 가맹점': found_local,
                 }
                 st.rerun()
-        st.caption('주소 없는 업체만 나라장터 → 공정위 통신판매사업자 순으로 조회 · 사업자번호 정확일치만 반영')
+        st.caption('주소 없는 업체만 나라장터 → 공정위 통신판매사업자 → 지역화폐 가맹점 순으로 조회 · 사업자번호 정확일치만 반영')
         result = st.session_state.pop('address_api_result', None)
         if result:
-            total = result['나라장터'] + result['공정위 통신판매사업자']
-            st.caption(f'최근 조회: {total}개 확인 · 나라장터 {result["나라장터"]}개 · 공정위 {result["공정위 통신판매사업자"]}개')
+            total = sum(result.values())
+            st.caption(
+                f'최근 조회: {total}개 확인 · 나라장터 {result.get("나라장터", 0)}개 · '
+                f'공정위 {result.get("공정위 통신판매사업자", 0)}개 · '
+                f'지역화폐 {result.get("지역화폐 가맹점", 0)}개'
+            )
 
     with a2:
         if missing_count:

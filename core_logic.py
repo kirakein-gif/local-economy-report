@@ -18,8 +18,6 @@ WAITING_STALE_SECONDS = QUEUE_POLL_SECONDS * 6
 DEFAULT_TARGET_AMOUNT = 500000
 
 API_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
-# 운영 중단 방지를 위한 임시 호환값. Streamlit Secrets의 G2B_API_KEY를 우선 사용합니다.
-LEGACY_G2B_API_KEY = "V%2FBFQCvaQlP%2F3ebvSQyuncyYbTzwqIxQ5yDO%2Fc%2FnX3YTRLd3ZZXxTeNhVd99xGMLoQOWLSwS7x%2BJ07aIn7Fk0w%3D%3D"
 
 CHUNGNAM_REGIONS = ["천안", "아산", "공주", "보령", "서산", "논산", "계룡", "당진", "금산", "부여", "서천", "청양", "홍성", "예산", "태안"]
 SCHOOL_LEVELS = ["학교(유)", "학교(초)", "학교(중)", "학교(고)", "학교(특수)", "교육지원청", "직속기관"]
@@ -85,9 +83,13 @@ def normalize_biz_no(value):
     digits=re.sub(r"\D","",re.sub(r"\.0$","",str(value).strip())); return digits if len(digits)==10 else ""
 
 def get_api_key():
-    try: key=st.secrets.get("G2B_API_KEY","")
-    except Exception: key=""
-    return key or LEGACY_G2B_API_KEY
+    try:
+        key = st.secrets.get("datagokr", "")
+    except Exception:
+        key = ""
+    if not key:
+        raise RuntimeError("Streamlit Secrets에 'datagokr' API 키가 설정되지 않았습니다.")
+    return str(key).strip()
 
 @st.cache_data(show_spinner=False,ttl=86400)
 def get_addr_api(biz_num):

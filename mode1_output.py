@@ -1,10 +1,11 @@
 import streamlit as st
 from core_logic import categorize_region_code, format_money, safe_value
 import excel_reports as reports
-from template_fallback import load_halfyear_template_safe
+from template_fallback import build_fallback_workbook
 
-# GitHub/배포 과정에서 xlsx 바이너리가 손상되더라도 내장 기본양식으로 자동 복구합니다.
-reports._load_halfyear_template = lambda: load_halfyear_template_safe(reports.HALFYEAR_TEMPLATE)
+# 반기 검토파일은 GitHub의 바이너리 xlsx를 직접 열지 않습니다.
+# 배포 과정의 바이너리 손상과 무관하게 내장 4시트 템플릿을 메모리에서 생성합니다.
+reports._load_halfyear_template = build_fallback_workbook
 
 
 def render_mode1_outputs(ctx):
@@ -50,7 +51,7 @@ def render_mode1_outputs(ctx):
             st.error(f'분기보고서 생성 오류: {exc}')
 
     with col2:
-        st.markdown('''<div class="download-card"><div class="download-icon">📝</div><div><div class="work-title">반기보고서 검토용 기초자료</div><div class="work-desc">공식 1-4 기초자료 형식으로 내려받아 계약방법·견적방법·구입목적 등을 검토합니다.</div></div></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="download-card"><div class="download-icon">📝</div><div><div class="work-title">반기보고서 검토용 기초자료</div><div class="work-desc">1-4 기초자료 형식으로 내려받아 계약방법·견적방법·구입목적 등을 검토합니다.</div></div></div>''', unsafe_allow_html=True)
         try:
             b, n, _ = reports.build_review_workbook_bytes(
                 df,

@@ -4,7 +4,7 @@ from ui_style import APP_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
-APP_VERSION = "1.3.3"
+APP_VERSION = "1.3.4"
 DEPLOY_DATE = "2026.09.03"
 
 st.set_page_config(
@@ -14,8 +14,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
-# GitHub/source 개발자 툴바는 숨기되 사이드바 재열기 버튼은 유지합니다.
-st.markdown('<style>[data-testid="stToolbar"]{display:none!important}</style>', unsafe_allow_html=True)
+# GitHub/source 링크는 .streamlit/config.toml의 toolbarMode=minimal로 숨깁니다.
+# 헤더 전체는 숨기지 않아 Streamlit 기본 제어가 필요한 경우 사용할 수 있게 둡니다.
 
 
 def render_waiting_room():

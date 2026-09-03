@@ -9,50 +9,53 @@ from core_logic import (
 
 
 def prepare_mode1():
-    st.markdown('<div class="section-title">자료 입력 및 처리 설정</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3, gap='medium')
-
-    with c1:
-        with st.container(border=True):
-            st.markdown('<div class="card-icon">📄</div><div class="card-title">자료 입력</div><div class="card-desc">자료관리목록 Excel 파일을 업로드하세요. 여러 파일은 자동으로 합산합니다.</div>', unsafe_allow_html=True)
-            data_files = st.file_uploader('자료관리목록 Excel', type=['xlsx', 'xls'], accept_multiple_files=True, key='source_files', label_visibility='collapsed')
-            if data_files:
-                st.caption(f'선택된 파일 {len(data_files)}개')
-
-    with c2:
-        with st.container(border=True):
-            st.markdown('<div class="card-icon">⚙️</div><div class="card-title">옵션 설정</div><div class="card-desc">기준 지역과 집계 금액을 설정합니다.</div>', unsafe_allow_html=True)
-            target_region = st.selectbox('기준 지역', CHUNGNAM_REGIONS, index=0, key='target_region')
-            raw_amount = st.text_input('금액 기준(원 이상)', value=f'{DEFAULT_TARGET_AMOUNT:,}', key='amount_raw')
-            cleaned = raw_amount.replace(',', '').replace(' ', '').strip()
-            if cleaned == '':
-                target_amount = 0
-            elif cleaned.isdigit():
-                target_amount = int(cleaned)
-            else:
-                target_amount = DEFAULT_TARGET_AMOUNT
-                st.warning(f'숫자만 입력해 주세요. {DEFAULT_TARGET_AMOUNT:,}원을 사용합니다.')
-
-    with c3:
-        with st.container(border=True):
-            st.markdown('<div class="card-icon green">▶</div><div class="card-title">자동 처리</div><div class="card-desc">업로드 후 주소를 보완하고 분기보고서와 반기 검토파일을 생성합니다.</div>', unsafe_allow_html=True)
-            institution_name = st.text_input('기관명', value='천안버들유치원', key='institution_name')
-            school_level = st.selectbox('급별', SCHOOL_LEVELS, index=0, key='school_level')
-            if data_files:
-                st.success('자료가 준비되었습니다. 아래 주소 보완 단계로 진행하세요.')
-            else:
-                st.info('Excel 파일을 선택하면 처리를 시작할 수 있습니다.')
-
     with st.sidebar:
-        st.markdown('<div class="side-section">반기 검토파일 설정</div>', unsafe_allow_html=True)
-        report_year = int(st.number_input('보고연도', min_value=2020, max_value=2100, value=2026, step=1))
-        report_label = st.text_input('보고구분', value='상반기')
-        period_start = st.date_input('기간 시작', value=date(2026, 1, 1))
-        period_end = st.date_input('기간 종료', value=date(2026, 7, 31))
-        st.markdown('<div class="side-help">반기 검토용 1-4 기초자료의 제목과 기간에 반영됩니다.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="side-section">집계 기준</div>', unsafe_allow_html=True)
+        target_region = st.selectbox('기준 지역', CHUNGNAM_REGIONS, index=0, key='target_region')
+        raw_amount = st.text_input('금액 기준(원 이상)', value=f'{DEFAULT_TARGET_AMOUNT:,}', key='amount_raw')
+        cleaned = raw_amount.replace(',', '').replace(' ', '').strip()
+        if cleaned == '':
+            target_amount = 0
+        elif cleaned.isdigit():
+            target_amount = int(cleaned)
+        else:
+            target_amount = DEFAULT_TARGET_AMOUNT
+            st.warning(f'숫자만 입력해 주세요. {DEFAULT_TARGET_AMOUNT:,}원을 사용합니다.')
+
+        st.markdown('<div class="side-section side-gap">기관 정보</div>', unsafe_allow_html=True)
+        institution_name = st.text_input('기관명', value='천안버들유치원', key='institution_name')
+        school_level = st.selectbox('급별', SCHOOL_LEVELS, index=0, key='school_level')
+
+        st.markdown('<div class="side-section side-gap">반기 검토파일 설정</div>', unsafe_allow_html=True)
+        report_year = int(st.number_input('보고연도', min_value=2020, max_value=2100, value=2026, step=1, key='report_year'))
+        report_label = st.selectbox('보고구분', ['상반기', '하반기'], index=0, key='report_label')
+        default_start = date(report_year, 1, 1) if report_label == '상반기' else date(report_year, 8, 1)
+        default_end = date(report_year, 7, 31) if report_label == '상반기' else date(report_year, 12, 31)
+        period_start = st.date_input('기간 시작', value=st.session_state.get('period_start', default_start), key='period_start')
+        period_end = st.date_input('기간 종료', value=st.session_state.get('period_end', default_end), key='period_end')
+        st.caption('검토용 1-4 기초자료 제목과 최종 파일명에 반영됩니다.')
+
+    st.markdown('<div class="section-title compact-title">자료 입력</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        left, right = st.columns([2.2, 1], gap='medium')
+        with left:
+            data_files = st.file_uploader(
+                '자료관리목록 Excel',
+                type=['xlsx', 'xls'],
+                accept_multiple_files=True,
+                key='source_files',
+                label_visibility='collapsed',
+            )
+        with right:
+            st.markdown(
+                f'''<div class="mini-info"><b>{target_region}</b> 기준<br>{target_amount:,}원 이상<br>{institution_name}</div>''',
+                unsafe_allow_html=True,
+            )
+        if data_files:
+            st.caption(f'선택된 파일 {len(data_files)}개 · 여러 파일은 자동 합산됩니다.')
 
     if not data_files:
-        st.markdown('''<div class="empty-card"><div class="empty-icon">📂</div><div class="work-title">자료관리목록을 업로드해 주세요</div><div class="work-desc">위의 ‘자료 입력’ 카드에서 Excel 파일을 선택하면 자동으로 자료를 분석합니다.</div></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="empty-card compact-empty"><div class="empty-icon">📂</div><div class="work-title">자료관리목록을 업로드해 주세요</div><div class="work-desc">왼쪽 설정을 확인한 뒤 위 영역에서 Excel 파일을 선택하세요.</div></div>''', unsafe_allow_html=True)
         st.stop()
 
     fingerprint = file_fingerprint(data_files)
@@ -89,9 +92,8 @@ def prepare_mode1():
     missing_count = int(missing.sum())
     completion = 0 if report_count == 0 else round((report_count - missing_count) / report_count * 100, 1)
 
-    st.markdown('<div class="section-title">처리 현황</div>', unsafe_allow_html=True)
     st.markdown(
-        f'''<div class="kpi-row"><div class="kpi-card"><div class="kpi-label">전체 계약자료</div><div class="kpi-value">{int(recognized.sum()):,}<span class="kpi-unit">건</span></div><div class="kpi-note">공사 · 용역 · 물품 인식 건수</div></div><div class="kpi-card"><div class="kpi-label">집계 대상</div><div class="kpi-value">{report_count:,}<span class="kpi-unit">건</span></div><div class="kpi-note">{target_amount:,}원 이상</div></div><div class="kpi-card"><div class="kpi-label">주소 완료율</div><div class="kpi-value">{completion}<span class="kpi-unit">%</span></div><div class="kpi-note">미확인 {missing_count}건 · 미확인은 타시도 임시분류</div></div></div>''',
+        f'''<div class="kpi-row compact-kpi"><div class="kpi-card"><div class="kpi-label">전체 계약자료</div><div class="kpi-value">{int(recognized.sum()):,}<span class="kpi-unit">건</span></div></div><div class="kpi-card"><div class="kpi-label">집계 대상</div><div class="kpi-value">{report_count:,}<span class="kpi-unit">건</span></div><div class="kpi-note">{target_amount:,}원 이상</div></div><div class="kpi-card"><div class="kpi-label">주소 완료율</div><div class="kpi-value">{completion}<span class="kpi-unit">%</span></div><div class="kpi-note">미확인 {missing_count}건</div></div></div>''',
         unsafe_allow_html=True,
     )
 

@@ -28,18 +28,22 @@ ensure_session_id()
 if not acquire_slot():
     render_waiting_room()
 
-active_count, waiting_count, _ = waiting_status()
-st.markdown(
-    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">📊</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">Excel 자료를 업로드하면 주소 보완부터 실적보고서 작성까지 자동으로 처리합니다.</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
-    unsafe_allow_html=True,
-)
+with st.sidebar:
+    st.markdown('<div class="sidebar-brand">📊 지역경제활성화</div>', unsafe_allow_html=True)
+    st.markdown('<div class="side-section">업무 선택</div>', unsafe_allow_html=True)
+    mode = st.radio(
+        "업무 선택",
+        ["자료 집계 · 분기/검토파일", "반기보고서 최종작성"],
+        label_visibility="collapsed",
+        key="work_mode",
+    )
+    st.divider()
 
-mode = st.radio(
-    "업무 모드",
-    ["자료 집계 · 분기/검토파일", "반기보고서 최종작성"],
-    horizontal=True,
-    label_visibility="collapsed",
-    key="work_mode",
+active_count, waiting_count, _ = waiting_status()
+mode_caption = "자료관리목록 정제 · 주소 보완 · 분기보고서 · 반기 검토파일" if mode.startswith("자료") else "검토 완료 기초자료 재업로드 · 최종 4시트 보고서"
+st.markdown(
+    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">📊</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">{mode_caption}</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
+    unsafe_allow_html=True,
 )
 
 if mode.startswith("자료"):
@@ -53,4 +57,4 @@ with st.sidebar:
         release_slot()
         st.success("자리를 반납했습니다. 페이지를 닫으셔도 됩니다.")
         st.stop()
-    st.caption("개발: 천안버들유치원 나대현 · 문의 및 오류 신고는 메신저로 부탁드립니다.")
+    st.caption("개발: 천안버들유치원 · 문의 및 오류 신고는 메신저로 부탁드립니다.")

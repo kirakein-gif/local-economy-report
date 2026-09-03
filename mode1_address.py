@@ -1,9 +1,13 @@
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import streamlit as st
 from address_api import get_address_from_public_apis
 from core_logic import missing_address_mask, touch_slot
+
+# 본 사이트와 4개 미러의 동시 운영을 고려해 앱 인스턴스당 2개 업체만 병렬 조회합니다.
+ADDRESS_LOOKUP_WORKERS = 2
 
 
 def _bizno_url(biz):
@@ -37,6 +41,11 @@ def _propagate_known_addresses(df, col_addr, biz_norm):
     return filled
 
 
+def _lookup_one_business(biz):
+    """한 사업자번호는 기존 우선순위(나라장터→공정위→지역화폐)를 그대로 지켜 조회합니다."""
+    return biz, *get_address_from_public_apis(biz)
+
+
 def render_address_tools(ctx):
     df = ctx['df']
     col_addr = ctx['col_addr']
@@ -64,22 +73,35 @@ def render_address_tools(ctx):
                 found_procurement = 0
                 found_ftc = 0
                 found_local = 0
-                for i, biz in enumerate(unique_biz):
-                    addr, source = get_address_from_public_apis(biz)
-                    if addr:
-                        mask = biz_norm.eq(biz) & missing_address_mask(df.iloc[:, col_addr])
-                        df.loc[mask, df.columns[col_addr]] = addr
-                        if source == '나라장터':
-                            found_procurement += 1
-                        elif source == '공정위 통신판매사업자':
-                            found_ftc += 1
-                        elif source == '지역화폐 가맹점':
-                            found_local += 1
-                    touch_slot()
-                    progress.progress(
-                        (i + 1) / len(unique_biz),
-                        text=f'{i+1}/{len(unique_biz)}개 업체 조회 · 나라장터 → 공정위 → 지역화폐',
-                    )
+                completed = 0
+
+                # 미러 4개 동시 운영을 고려해 과도한 API 동시 호출을 피하면서 2개 업체씩 처리합니다.
+                with ThreadPoolExecutor(max_workers=ADDRESS_LOOKUP_WORKERS) as executor:
+                    futures = {executor.submit(_lookup_one_business, biz): biz for biz in unique_biz}
+                    for future in as_completed(futures):
+                        biz = futures[future]
+                        try:
+                            _, addr, source = future.result()
+                        except Exception:
+                            addr, source = None, None
+
+                        if addr:
+                            mask = biz_norm.eq(biz) & missing_address_mask(df.iloc[:, col_addr])
+                            df.loc[mask, df.columns[col_addr]] = addr
+                            if source == '나라장터':
+                                found_procurement += 1
+                            elif source == '공정위 통신판매사업자':
+                                found_ftc += 1
+                            elif source == '지역화폐 가맹점':
+                                found_local += 1
+
+                        touch_slot()
+                        completed += 1
+                        progress.progress(
+                            completed / len(unique_biz),
+                            text=f'{completed}/{len(unique_biz)}개 업체 조회 · 나라장터 → 공정위 → 지역화폐',
+                        )
+
                 _propagate_known_addresses(df, col_addr, biz_norm)
                 st.session_state.df = df
                 st.session_state.address_api_result = {
@@ -88,7 +110,7 @@ def render_address_tools(ctx):
                     '지역화폐 가맹점': found_local,
                 }
                 st.rerun()
-        st.caption('주소 없는 업체만 나라장터 → 공정위 통신판매사업자 → 지역화폐 가맹점 순으로 조회 · 사업자번호 정확일치만 반영')
+        st.caption('주소 없는 업체만 나라장터 → 공정위 통신판매사업자 → 지역화폐 가맹점 순으로 조회 · 사업자번호 정확일치만 반영 · 앱당 최대 2개 업체 동시 조회')
         result = st.session_state.pop('address_api_result', None)
         if result:
             total = sum(result.values())

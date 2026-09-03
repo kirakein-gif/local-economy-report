@@ -5,6 +5,11 @@ APP_CSS = r"""
 html,body,[class*="css"]{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 #MainMenu,footer{visibility:hidden}
 header[data-testid="stHeader"]{background:transparent!important;height:2.25rem!important;visibility:visible!important}
+/* 사이드바는 업무의 핵심 설정영역이므로 접기 버튼 자체를 숨깁니다. */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebar"] [data-testid="baseButton-header"],
+[data-testid="stSidebar"] button[kind="header"]{display:none!important;visibility:hidden!important}
+/* 혹시 브라우저 상태 등으로 접힌 경우에는 재열기 제어는 항상 남깁니다. */
 [data-testid="stSidebarCollapsedControl"],[data-testid="collapsedControl"]{visibility:visible!important;display:flex!important}
 .stApp{background:var(--bg)}
 .block-container{max-width:1320px;padding-top:.6rem!important;padding-bottom:1.2rem!important;padding-left:1.25rem!important;padding-right:1.25rem!important}

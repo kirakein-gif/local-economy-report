@@ -12,28 +12,27 @@ REQUIRED_SHEETS = [
     "1-3. 총괄(물품)",
     "1-4. 기초자료(지역경제활성화)",
 ]
-PART_NAMES = [
-    "official_01.b64",
-    "official_02.b64",
-    "official_03a.b64",
-    "official_03b.b64",
-    "official_04.b64",
+PART_SPECS = [
+    ("official_01.b64", 8000),
+    ("official_02.b64", 8000),
+    ("official_03a.b64", 4000),
+    ("official_03b.b64", 4000),
+    ("official_04.b64", 4948),
 ]
 
 
 def load_official_halfyear_template():
-    """사용자가 제공한 확정 양식을 보존한 내장 템플릿을 복원합니다.
-
-    확정 양식의 실제 서식/병합/안내문을 보존한 검증본을 텍스트 조각으로
-    저장하고 실행 시 메모리에서 XLSX로 복원합니다. GitHub/Streamlit 배포
-    과정에서 바이너리 XLSX 파일이 손상되어도 이 경로는 영향을 받지 않습니다.
-    """
+    """사용자가 제공한 확정 양식을 보존한 내장 템플릿을 복원합니다."""
     chunks = []
-    for name in PART_NAMES:
+    for name, expected_len in PART_SPECS:
         path = PART_DIR / name
         if not path.exists():
             raise FileNotFoundError(f"공식 반기양식 내장 데이터가 없습니다: {name}")
-        chunks.append(path.read_text(encoding="utf-8").strip())
+        text = path.read_text(encoding="utf-8").strip()
+        if len(text) < expected_len:
+            raise RuntimeError(f"공식 반기양식 데이터가 불완전합니다: {name}")
+        # 저장 커넥터에서 줄 끝 문자가 붙는 경우에도 원본 길이만 정확히 사용합니다.
+        chunks.append(text[:expected_len])
 
     try:
         raw = base64.b64decode("".join(chunks), validate=True)

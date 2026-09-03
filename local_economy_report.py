@@ -30,25 +30,27 @@ if not acquire_slot():
 
 active_count, waiting_count, _ = waiting_status()
 st.markdown(
-    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">📊</div><div><div class="app-title">지역경제활성화 자동 집계 시스템</div><div class="app-sub">자료관리목록 정제 · 주소 보완 · 분기보고서 · 반기 4시트 보고서</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
+    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">📊</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">Excel 자료를 업로드하면 주소 보완부터 실적보고서 작성까지 자동으로 처리합니다.</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.markdown('<div class="side-section">업무 선택</div>', unsafe_allow_html=True)
-    mode = st.radio(
-        "업무 선택",
-        ["① 자료 집계 · 분기보고서", "② 반기보고서 최종작성"],
-        label_visibility="collapsed",
-        key="work_mode",
-    )
-    st.divider()
+mode = st.radio(
+    "업무 모드",
+    ["자료 집계 · 분기/검토파일", "반기보고서 최종작성"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="work_mode",
+)
 
-if mode.startswith("①"):
+if mode.startswith("자료"):
     render_mode1()
 else:
     render_mode2()
 
 with st.sidebar:
     st.divider()
+    if st.button("나가기 · 자리 반납", width='stretch', key='global_release'):
+        release_slot()
+        st.success("자리를 반납했습니다. 페이지를 닫으셔도 됩니다.")
+        st.stop()
     st.caption("개발: 천안버들유치원 나대현 · 문의 및 오류 신고는 메신저로 부탁드립니다.")

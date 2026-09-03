@@ -21,7 +21,7 @@ DEFAULT_TARGET_AMOUNT = 500000
 API_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
 
 CHUNGNAM_REGIONS = ["천안", "아산", "공주", "보령", "서산", "논산", "계룡", "당진", "금산", "부여", "서천", "청양", "홍성", "예산", "태안"]
-SCHOOL_LEVELS = ["학교(유)", "학교(초)", "학교(중)", "학교(고)", "학교(특수)", "교육지원청", "직속기관"]
+SCHOOL_LEVELS = ["본청", "학교(유)", "학교(초)", "학교(중)", "학교(고)", "교육지원청", "직속기관"]
 CONTRACT_METHODS = ["수의계약", "입찰", "조달구매"]
 COMPETITION_METHODS = [
     "1인수의(단일견적)", "2인수의(공개견적)", "제3자단가", "다수공급자2단계경쟁(MAS)",
@@ -40,7 +40,7 @@ HEADER_ALIASES = {
     "company": ["업체명", "계약업체명", "계약상대자", "계약상대자명", "상호"],
     "biz": ["사업자등록번호", "사업자번호", "사업자 등록번호"],
     "address": ["주소", "업체주소", "사업장주소", "소재지주소"],
-    "institution": ["기관명(학교명)", "기관명", "학교명", "기관(학교)명", "기관학교명"],
+    "institution": ["계약기관", "기관명(학교명)", "기관명", "학교명", "기관(학교)명", "기관학교명"],
     "school_level": ["급별", "학교급", "기관급별"],
 }
 
@@ -141,12 +141,31 @@ def first_nonblank(series):
             return str(value).strip()
     return ""
 
+def classify_school_level(institution):
+    """계약기관명만으로 급별을 판정합니다."""
+    name = re.sub(r"\s+", "", str(institution or "").strip())
+    if not name:
+        return ""
+    if name == "충청남도교육청":
+        return "본청"
+    if "지원청" in name:
+        return "교육지원청"
+    if "유치원" in name:
+        return "학교(유)"
+    if "초등학교" in name:
+        return "학교(초)"
+    if "중학교" in name:
+        return "학교(중)"
+    if "고등학교" in name:
+        return "학교(고)"
+    return "직속기관"
+
 def extract_source_metadata(df, headers):
-    """업로드 원본에 기관명/급별 열이 있으면 첫 유효값을 검토파일 공통값으로 사용합니다."""
-    inst_col = find_source_col(headers, "institution")
-    level_col = find_source_col(headers, "school_level")
+    """첫 업로드 자료의 I열(계약기관)을 기관명으로 사용하고 급별은 기관명에서 판정합니다."""
+    # 사용자가 지정한 자료관리목록 표준: I열(0-base 8) = 계약기관
+    inst_col = 8 if df.shape[1] > 8 else find_source_col(headers, "institution")
     institution = first_nonblank(df.iloc[:, inst_col]) if inst_col is not None and inst_col < df.shape[1] else ""
-    school_level = first_nonblank(df.iloc[:, level_col]) if level_col is not None and level_col < df.shape[1] else ""
+    school_level = classify_school_level(institution)
     return institution, school_level
 
 def normalize_contract_method(value):
@@ -157,10 +176,14 @@ def normalize_contract_method(value):
     if "조달" in text: return "조달구매"
     return str(value).strip()
 
-def default_competition_method(contract_method, current=""):
-    current = str(current or "").strip()
-    if current and current.lower() not in ("nan", "none", "null"):
-        return current
+def map_competition_method(raw_value, contract_method):
+    """자료관리목록 D열 문구를 확정 양식의 견적/경쟁방법으로 변환합니다."""
+    text = re.sub(r"\s+", "", str(raw_value or "").strip())
+    if text and text.lower() not in ("nan", "none", "null"):
+        if "단일견적" in text or "1인수의" in text or "1인견적" in text:
+            return "1인수의(단일견적)"
+        if "2인수의" in text or "2인견적" in text or "2인이상" in text or "공개견적" in text:
+            return "2인수의(공개견적)"
     if contract_method == "수의계약": return "1인수의(단일견적)"
     if contract_method == "입찰": return "자체(제한경쟁)"
     return ""
@@ -175,7 +198,6 @@ def categorize_region_code(addr,target_region):
 
 def region_label(code): return {1:"충남도내(관내)",2:"충남도내(관외)",3:"타시도"}.get(code,"타시도")
 def shorten_address(addr):
-    # 하위호환용. 검토파일에는 full_address()를 사용합니다.
     return full_address(addr)
 def full_address(addr):
     text=re.sub(r"\s+"," ",str(addr or "").strip())
@@ -210,15 +232,22 @@ def format_money(value):
     except Exception: return 0
 
 def records_from_source(df,headers,target_amount,target_region):
-    cols={k:find_source_col(headers,k) for k in HEADER_ALIASES}; amount_col,biz_col,addr_col,type_col=(source_col(headers,k) for k in ["amount","biz","address","type"])
+    amount_col,biz_col,addr_col,type_col=(source_col(headers,k) for k in ["amount","biz","address","type"])
+    # 사용자 지정 표준 위치: C열=계약방법, D열=견적/경쟁방법
+    contract_method_col = 2 if df.shape[1] > 2 else find_source_col(headers,"contract_method")
+    competition_col = 3 if df.shape[1] > 3 else find_source_col(headers,"competition_method")
+    contract_name_col = find_source_col(headers,"contract_name")
+    contract_date_col = find_source_col(headers,"contract_date")
+    company_col = find_source_col(headers,"company")
     amount=pd.to_numeric(df.iloc[:,amount_col],errors="coerce").fillna(0); work=df.loc[amount>=target_amount]; records=[]
     for _,row in work.iterrows():
         ctype=normalize_contract_type(safe_value(row,type_col))
         if ctype not in ["공사","용역","물품"]: continue
-        address_full=full_address(safe_value(row,addr_col,"")); address_missing=not address_full; contract_name=str(safe_value(row,cols.get("contract_name"),"")).strip()
-        contract_method=normalize_contract_method(safe_value(row,cols.get("contract_method"),""))
-        competition=default_competition_method(contract_method,safe_value(row,cols.get("competition_method"),""))
-        records.append({"목적물":ctype,"계약방법":contract_method,"견적경쟁방법":competition,"계약명":contract_name,"계약일자":to_datetime_or_blank(safe_value(row,cols.get("contract_date"),"")),"계약금액":format_money(safe_value(row,amount_col,0)),"업체명":str(safe_value(row,cols.get("company"),"")).strip(),"주소":address_full,"소재지":region_label(categorize_region_code(address_full,target_region)),"구입목적":classify_purchase_purpose(contract_name) if ctype=="물품" else "","비고":"주소 미확인 → 타시도 임시분류" if address_missing else ""})
+        address_full=full_address(safe_value(row,addr_col,"")); address_missing=not address_full
+        contract_name=str(safe_value(row,contract_name_col,"")).strip()
+        contract_method=normalize_contract_method(safe_value(row,contract_method_col,""))
+        competition=map_competition_method(safe_value(row,competition_col,""),contract_method)
+        records.append({"목적물":ctype,"계약방법":contract_method,"견적경쟁방법":competition,"계약명":contract_name,"계약일자":to_datetime_or_blank(safe_value(row,contract_date_col,"")),"계약금액":format_money(safe_value(row,amount_col,0)),"업체명":str(safe_value(row,company_col,"")).strip(),"주소":address_full,"소재지":region_label(categorize_region_code(address_full,target_region)),"구입목적":classify_purchase_purpose(contract_name) if ctype=="물품" else "","비고":"주소 미확인 → 타시도 임시분류" if address_missing else ""})
     return records
 
 def aggregate_records(records):

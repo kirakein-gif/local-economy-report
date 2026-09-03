@@ -29,7 +29,17 @@ if not acquire_slot():
     render_waiting_room()
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-brand">📊 지역경제활성화</div>', unsafe_allow_html=True)
+    if st.button("나가기 · 자리 반납", width='stretch', key='global_release'):
+        release_slot()
+        st.success("자리를 반납했습니다. 페이지를 닫으셔도 됩니다.")
+        st.stop()
+
+    st.markdown(
+        '''<div class="developer-note"><b>개발: 천안버들유치원 나대현</b><br>문의 및 오류 신고는 메신저로 부탁드립니다.</div>''',
+        unsafe_allow_html=True,
+    )
+    st.divider()
+    st.markdown('<div class="sidebar-brand">지역경제활성화 업무도구</div>', unsafe_allow_html=True)
     st.markdown('<div class="side-section">업무 선택</div>', unsafe_allow_html=True)
     mode = st.radio(
         "업무 선택",
@@ -42,7 +52,7 @@ with st.sidebar:
 active_count, waiting_count, _ = waiting_status()
 mode_caption = "자료관리목록 정제 · 주소 보완 · 분기보고서 · 반기 검토파일" if mode.startswith("자료") else "검토 완료 기초자료 재업로드 · 최종 4시트 보고서"
 st.markdown(
-    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">📊</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">{mode_caption}</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
+    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">▦</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">{mode_caption}</div></div></div><div class="live-chip">사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
     unsafe_allow_html=True,
 )
 
@@ -50,11 +60,3 @@ if mode.startswith("자료"):
     render_mode1()
 else:
     render_mode2()
-
-with st.sidebar:
-    st.divider()
-    if st.button("나가기 · 자리 반납", width='stretch', key='global_release'):
-        release_slot()
-        st.success("자리를 반납했습니다. 페이지를 닫으셔도 됩니다.")
-        st.stop()
-    st.caption("개발: 천안버들유치원 · 문의 및 오류 신고는 메신저로 부탁드립니다.")

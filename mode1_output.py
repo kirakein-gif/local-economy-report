@@ -5,9 +5,10 @@ from openpyxl import load_workbook
 
 from core_logic import categorize_region_code, format_money, safe_value
 import excel_reports as reports
-from template_fallback import load_halfyear_template_safe
+from official_template import load_official_halfyear_template
 
-reports._load_halfyear_template = lambda: load_halfyear_template_safe(reports.HALFYEAR_TEMPLATE)
+# 사용자가 제공한 확정 양식을 그대로 보존한 내장 템플릿을 사용합니다.
+reports._load_halfyear_template = load_official_halfyear_template
 
 OFFICIAL_GUIDE = "◑에듀파인-계약목록 내려받기 후(①2025년회계2026.1월~2월,② 2026년회계3월~7월)→목록 정리(공공요금, 수수료 등삭제)→ 엑셀.net 활용(파일 올리기)"
 
@@ -80,7 +81,7 @@ def render_mode1_outputs(ctx):
             with h1:
                 st.markdown('<div class="small-file-icon green-file">✓</div>', unsafe_allow_html=True)
             with h2:
-                st.markdown('<div class="card-title">반기 검토용 기초자료</div><div class="card-desc no-margin">1-4 양식 · 검토 후 최종작성에서 재업로드</div>', unsafe_allow_html=True)
+                st.markdown('<div class="card-title">반기 검토용 기초자료</div><div class="card-desc no-margin">확정 1-4 양식 · 검토 후 최종작성에서 재업로드</div>', unsafe_allow_html=True)
             try:
                 b, n, _ = reports.build_review_workbook_bytes(
                     df,

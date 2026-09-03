@@ -1,4 +1,5 @@
 import hashlib
+import os
 import re
 import threading
 import time
@@ -83,12 +84,14 @@ def normalize_biz_no(value):
     digits=re.sub(r"\D","",re.sub(r"\.0$","",str(value).strip())); return digits if len(digits)==10 else ""
 
 def get_api_key():
+    key = ""
     try:
-        key = st.secrets.get("datagokr", "")
+        key = st.secrets.get("DATAGOKR", "") or st.secrets.get("datagokr", "")
     except Exception:
-        key = ""
+        pass
+    key = key or os.getenv("DATAGOKR", "") or os.getenv("datagokr", "")
     if not key:
-        raise RuntimeError("Streamlit Secrets에 'datagokr' API 키가 설정되지 않았습니다.")
+        raise RuntimeError("Streamlit 앱 Secrets에 DATAGOKR API 키가 설정되지 않았습니다.")
     return str(key).strip()
 
 @st.cache_data(show_spinner=False,ttl=86400)

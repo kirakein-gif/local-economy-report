@@ -8,7 +8,7 @@ from core_logic import get_api_key, normalize_biz_no
 
 PROCUREMENT_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
 FTC_MAIL_ORDER_URL = "https://apis.data.go.kr/1130000/MllBsDtl_3Service/getMllBsInfoDetail_3"
-LOCAL_FRANCHISE_URL = "https://apis.data.go.kr/B190001/localFranchisesV2/franchiseV2"
+LOCAL_FRANCHISE_URL = "https://apis.data.go.kr/B190001/localFranchisesV3/franchiseV3"
 
 
 def _clean(value):
@@ -92,7 +92,7 @@ def get_ftc_mail_order_address(biz_num):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_local_franchise_address(biz_num):
-    """전국 지역화폐 가맹점 정보에서 사업자번호 정확일치로 주소를 조회합니다."""
+    """한국조폐공사 지역화폐 가맹점 V3에서 사업자번호 정확일치로 주소를 조회합니다."""
     biz = normalize_biz_no(biz_num)
     if not biz:
         return None
@@ -101,8 +101,8 @@ def get_local_franchise_address(biz_num):
         "serviceKey": urllib.parse.unquote(get_api_key()),
         "page": "1",
         "perPage": "20",
-        "returnType": "JSON",
         "cond[brno::EQ]": biz,
+        "returnType": "JSON",
     }
     try:
         res = requests.get(LOCAL_FRANCHISE_URL, params=params, timeout=10)

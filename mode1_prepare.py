@@ -22,7 +22,6 @@ def _detect_region_from_addresses(df, col_addr):
     """기존 주소에서 가장 많이 등장하는 충남 시·군을 1차 기준 지역으로 잡습니다."""
     if col_addr is None or col_addr >= df.shape[1]:
         return CHUNGNAM_REGIONS[0], 0
-
     counts = {region: 0 for region in CHUNGNAM_REGIONS}
     for value in df.iloc[:, col_addr].dropna():
         text = str(value).strip()
@@ -32,9 +31,7 @@ def _detect_region_from_addresses(df, col_addr):
             if region in text:
                 counts[region] += 1
                 break
-
-    best_region, best_count = max(counts.items(), key=lambda item: item[1])
-    return best_region, best_count
+    return max(counts.items(), key=lambda item: item[1])
 
 
 def _set_amount(value):
@@ -65,34 +62,63 @@ def prepare_mode1():
     if 'region_mode' not in st.session_state:
         st.session_state.region_mode = '자동 선택'
 
-    # 상단은 표준 UI 이미지처럼 자료 입력 / 검색 조건 2개 카드로 구성합니다.
+    # 실제 배포 화면 캡처를 기준으로 한 2차 픽셀 보정.
+    # 기능은 Streamlit 기본 위젯을 유지하되 카드 높이/여백/업로더/주소보완 연결감을 표준 시안에 맞춥니다.
+    st.markdown(
+        '''<style>
+        .block-container{padding-top:.75rem!important}
+        .standard-hero{margin-bottom:12px!important}
+        .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-filter_card [data-testid="stVerticalBlockBorderWrapper"]{min-height:0!important;height:420px!important}
+        .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"]>div,
+        .st-key-filter_card [data-testid="stVerticalBlockBorderWrapper"]>div{padding:.78rem .95rem!important}
+        .st-key-upload_card [data-testid="stFileUploaderDropzone"],
+        .st-key-upload_card [data-testid="stFileUploadDropzone"]{min-height:165px!important;height:165px!important;margin-top:2px!important}
+        .st-key-upload_card [data-testid="stFileUploader"]{margin-bottom:0!important}
+        .source-path-guide{margin-top:12px!important}
+        .upload-checks{margin-top:8px!important;gap:2px!important}
+        .filter-title-row{padding-bottom:8px!important;margin-bottom:8px!important}
+        .filter-divider{margin-top:8px!important;margin-bottom:8px!important}
+        .st-key-filter_card [data-testid="stSlider"]{margin-top:4px!important}
+        .address-head-row{margin-top:12px!important;margin-bottom:10px!important;align-items:center!important}
+        .address-head-left{min-height:70px!important}
+        .address-missing-card,.address-complete-card{min-width:320px!important;min-height:70px!important;padding:10px 16px!important}
+        .st-key-api_address_card [data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-user_address_card [data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-manual_address_card [data-testid="stVerticalBlockBorderWrapper"]{min-height:236px!important;height:236px!important}
+        .step-card-desc{min-height:48px!important;margin-bottom:5px!important}
+        .step-count{margin-top:6px!important;padding:7px 10px!important}
+        .workflow-strip{margin-top:9px!important;margin-bottom:8px!important}
+        @media(max-width:1100px){
+          .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"],
+          .st-key-filter_card [data-testid="stVerticalBlockBorderWrapper"]{height:auto!important;min-height:0!important}
+        }
+        </style>''',
+        unsafe_allow_html=True,
+    )
+
     left, right = st.columns([1.62, 1], gap='medium')
 
     with left:
         with st.container(border=True, key='upload_card'):
             st.markdown(
-                '''<div class="panel-head">
-                    <div class="panel-icon blue-icon">▤</div>
-                    <div><div class="panel-title">자료 입력</div>
-                    <div class="panel-desc">계약자료 Excel 파일을 업로드하세요. <b>(여러 파일 가능)</b></div></div>
-                </div>''',
+                '''<div class="panel-head"><div class="panel-icon blue-icon">▤</div><div>
+                <div class="panel-title">자료 입력</div>
+                <div class="panel-desc">계약자료 Excel 파일을 업로드하세요. <b>(여러 파일 가능)</b></div></div></div>''',
                 unsafe_allow_html=True,
             )
             data_files = st.file_uploader(
-                '자료관리목록 Excel',
-                type=['xlsx', 'xls'],
-                accept_multiple_files=True,
-                key='source_files',
-                label_visibility='collapsed',
+                '자료관리목록 Excel', type=['xlsx', 'xls'], accept_multiple_files=True,
+                key='source_files', label_visibility='collapsed',
             )
-            st.markdown(
-                '''<div class="drop-guide">
-                    <div class="drop-cloud">☁</div>
+            # 업로드 전에는 큰 드래그 안내를 보여주고, 업로드 후에는 Streamlit 파일칩과 겹치지 않도록 제거합니다.
+            if not data_files:
+                st.markdown(
+                    '''<div class="drop-guide"><div class="drop-cloud">☁</div>
                     <b>여기에 파일을 드래그하거나 클릭하여 업로드하세요</b>
-                    <span>Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다.</span>
-                </div>''',
-                unsafe_allow_html=True,
-            )
+                    <span>Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다.</span></div>''',
+                    unsafe_allow_html=True,
+                )
             st.markdown(
                 '''<div class="source-path-guide"><span class="path-info">●</span>
                 <b>파일 다운로드 경로 :</b>&nbsp; 학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리<br>
@@ -103,8 +129,7 @@ def prepare_mode1():
                 '''<div class="upload-checks">
                 <span>● 여러 파일을 한 번에 업로드하면 자동으로 합산됩니다.</span>
                 <span>● 파일을 드래그해서 놓아도 업로드할 수 있습니다.</span>
-                <span>● 업로드한 파일은 현재 작업 중에만 임시 사용됩니다.</span>
-                </div>''',
+                <span>● 업로드한 파일은 현재 작업 중에만 임시 사용됩니다.</span></div>''',
                 unsafe_allow_html=True,
             )
 
@@ -141,13 +166,9 @@ def prepare_mode1():
                 <div class="filter-note">비워두면 전체 데이터를 대상으로 처리합니다.</div></div>''',
                 unsafe_allow_html=True,
             )
-
             st.markdown('<div class="field-title">기준 지역 <span class="field-info">i</span></div>', unsafe_allow_html=True)
             region_mode = st.radio(
-                '기준 지역',
-                ['자동 선택', '직접 선택'],
-                horizontal=True,
-                key='region_mode',
+                '기준 지역', ['자동 선택', '직접 선택'], horizontal=True, key='region_mode',
                 help='자동 선택은 업로드 자료의 기존 주소에서 가장 많이 나타나는 지역을 기준으로 잡습니다.',
                 label_visibility='collapsed',
             )
@@ -156,7 +177,7 @@ def prepare_mode1():
                 if data_files and auto_region_count:
                     st.markdown(
                         f'''<div class="auto-region-box"><span>현재 기준 지역</span><b>{target_region}</b>
-                        <small>(예시: 주소가 가장 많은 지역) · 기존 주소 {auto_region_count:,}건 확인</small></div>''',
+                        <small>기존 주소에서 가장 많이 확인되는 지역 · 기존 주소 {auto_region_count:,}건 확인</small></div>''',
                         unsafe_allow_html=True,
                     )
                 else:
@@ -168,59 +189,25 @@ def prepare_mode1():
             else:
                 current = st.session_state.get('manual_target_region', CHUNGNAM_REGIONS[0])
                 target_region = st.selectbox(
-                    '지역 직접 선택',
-                    CHUNGNAM_REGIONS,
+                    '지역 직접 선택', CHUNGNAM_REGIONS,
                     index=CHUNGNAM_REGIONS.index(current) if current in CHUNGNAM_REGIONS else 0,
-                    key='manual_target_region',
-                    label_visibility='collapsed',
+                    key='manual_target_region', label_visibility='collapsed',
                 )
 
             st.markdown('<div class="filter-divider"></div>', unsafe_allow_html=True)
             st.markdown('<div class="field-title">집계 기준 금액 <span>(원 이상)</span> <span class="field-info">i</span></div>', unsafe_allow_html=True)
-
             q1, q2, q3, q4, q5 = st.columns([0.75, 0.85, 0.85, 0.9, 1.42], gap='small')
-            quick_specs = [
-                (q1, '0원', 0),
-                (q2, '10만원', 100000),
-                (q3, '50만원', 500000),
-                (q4, '100만원', 1000000),
-            ]
-            for col, label, value in quick_specs:
-                col.button(
-                    label,
-                    key=f'quick_amount_{value}',
-                    on_click=_set_amount,
-                    args=(value,),
-                    width='stretch',
-                    type='primary' if int(st.session_state.amount_number) == value else 'secondary',
-                )
+            for colbox, label, value in [(q1,'0원',0),(q2,'10만원',100000),(q3,'50만원',500000),(q4,'100만원',1000000)]:
+                colbox.button(label, key=f'quick_amount_{value}', on_click=_set_amount, args=(value,), width='stretch',
+                              type='primary' if int(st.session_state.amount_number) == value else 'secondary')
             with q5:
                 st.markdown('<div class="direct-input-label">직접 입력</div>', unsafe_allow_html=True)
-                st.number_input(
-                    '직접 입력',
-                    min_value=0,
-                    step=10000,
-                    key='amount_number',
-                    on_change=_sync_amount_from_number,
-                    format='%d',
-                    label_visibility='collapsed',
-                    help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.',
-                )
-
-            st.slider(
-                '금액 슬라이더',
-                min_value=0,
-                max_value=AMOUNT_SLIDER_MAX,
-                step=100000,
-                key='amount_slider',
-                on_change=_sync_amount_from_slider,
-                label_visibility='collapsed',
-            )
+                st.number_input('직접 입력', min_value=0, step=10000, key='amount_number', on_change=_sync_amount_from_number,
+                                format='%d', label_visibility='collapsed', help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.')
+            st.slider('금액 슬라이더', min_value=0, max_value=AMOUNT_SLIDER_MAX, step=100000,
+                      key='amount_slider', on_change=_sync_amount_from_slider, label_visibility='collapsed')
             target_amount = int(st.session_state.amount_number or 0)
-            st.markdown(
-                f'<div class="slider-caption"><span>0원</span><b>{target_amount:,}원 이상</b><span>{AMOUNT_SLIDER_MAX:,}원+</span></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="slider-caption"><span>0원</span><b>{target_amount:,}원 이상</b><span>{AMOUNT_SLIDER_MAX:,}원+</span></div>', unsafe_allow_html=True)
 
     if not data_files:
         st.stop()

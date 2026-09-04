@@ -12,7 +12,6 @@ REPO = "kirakein-gif/local-economy-report"
 BRANCH = "main"
 STORE_PATH = "data/manual_addresses.json"
 API_URL = f"https://api.github.com/repos/{REPO}/contents/{STORE_PATH}"
-RAW_URL = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/{STORE_PATH}"
 
 
 def _token():
@@ -35,14 +34,24 @@ def _headers(write=False):
     return headers
 
 
+def _decode_contents_payload(payload):
+    raw = base64.b64decode(payload.get("content", "")).decode("utf-8")
+    data = json.loads(raw) if raw.strip() else {}
+    return data if isinstance(data, dict) else {}
+
+
 def load_manual_addresses():
-    """공유 수동주소를 읽습니다. 읽기는 공개 raw 파일을 사용해 토큰 호출을 줄입니다."""
+    """GitHub Contents API에서 공유 수동주소의 최신본을 직접 읽습니다."""
     try:
-        res = requests.get(RAW_URL, params={"t": int(time.time())}, timeout=5)
+        res = requests.get(
+            API_URL,
+            params={"ref": BRANCH, "t": int(time.time() * 1000)},
+            headers=_headers(),
+            timeout=8,
+        )
         res.raise_for_status()
-        data = res.json()
-        return data if isinstance(data, dict) else {}
-    except (requests.RequestException, ValueError, TypeError):
+        return _decode_contents_payload(res.json())
+    except (requests.RequestException, ValueError, TypeError, KeyError, json.JSONDecodeError):
         return {}
 
 
@@ -64,10 +73,7 @@ def _read_for_update():
     res = requests.get(API_URL, params={"ref": BRANCH}, headers=_headers(), timeout=8)
     res.raise_for_status()
     payload = res.json()
-    raw = base64.b64decode(payload.get("content", "")).decode("utf-8")
-    data = json.loads(raw) if raw.strip() else {}
-    if not isinstance(data, dict):
-        data = {}
+    data = _decode_contents_payload(payload)
     return data, payload["sha"]
 
 

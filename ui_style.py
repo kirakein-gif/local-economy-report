@@ -7,14 +7,18 @@ html,body,[class*="css"]{font-family:'Pretendard',-apple-system,BlinkMacSystemFo
 header[data-testid="stHeader"]{background:transparent;pointer-events:none}
 header[data-testid="stHeader"] button{pointer-events:auto}
 [data-testid="stToolbarActions"],[data-testid="stDecoration"]{display:none}
-[data-testid="stExpandSidebarButton"]{position:fixed;left:2px;top:2px;width:24px;height:24px;background:#eef6ff;border-radius:5px}
+[data-testid="stExpandSidebarButton"],[data-testid="stSidebarCollapseButton"],[data-testid="stSidebar"] button[kind="headerNoPadding"]{display:none}
 .stApp{background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);color:var(--navy)}
 .block-container{max-width:1580px;padding:1rem 1.4rem 1.7rem!important}
-[data-testid="stSidebar"]{background:#f8fafc!important;border-right:1px solid var(--line)}
-[data-testid="stSidebar"]>div:first-child{padding-top:1rem!important;padding-left:.9rem!important;padding-right:.9rem!important}
-[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] .stCaption{color:#52637a!important;font-size:.82rem!important}
-[data-testid="stSidebar"] hr{border-color:var(--line);margin:.7rem 0!important}
-.sidebar-brand{font-size:1rem;font-weight:800;color:var(--navy);margin:2px 0 11px}.side-section{font-size:.7rem;font-weight:750;color:#718198;text-transform:uppercase;letter-spacing:.055em;margin:4px 0 6px}.developer-note{font-size:.73rem;line-height:1.45;color:#718198;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin:7px 0 3px}.developer-note b{color:#43546b}
+/* Shared, always visible navigation; reporting controls live in the content. */
+[data-testid="stSidebar"]{display:flex!important;visibility:visible!important;transform:none!important;margin-left:0!important;width:236px!important;min-width:236px!important;max-width:236px!important;background:#f2f7fd!important;border-right:1px solid var(--line)}
+[data-testid="stSidebarHeader"]{display:none}
+[data-testid="stSidebarContent"]{padding:24px 12px}
+[data-testid="stSidebarUserContent"]{padding:0!important}
+.sidebar-brand{font-size:21px;font-weight:850;color:var(--navy);margin:0 0 22px}.side-section{font-size:13px;font-weight:700;color:#617a99;margin:12px 0 10px}
+[data-testid="stSidebar"] [role="radiogroup"]{gap:10px}[data-testid="stSidebar"] [role="radiogroup"] label{padding:12px 10px;background:transparent;border:1px solid transparent;border-radius:9px;margin:0;width:100%}[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked){background:#1677f2;color:#fff;border-color:#1677f2}[data-testid="stSidebar"] [role="radiogroup"] label p{font-size:13px;font-weight:650}[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p{color:#fff}
+.developer-note{font-size:12px;line-height:1.65;color:#617a99;padding:14px 10px;border:1px solid #d9e4f0;border-radius:9px;background:#fff}.developer-note b{color:#315579}.st-key-global_release button{font-size:14px;color:#496789;border-color:#cddcec}
+@media(max-width:800px){[data-testid="stAppViewContainer"]{flex-direction:column;overflow:auto}[data-testid="stSidebar"]{position:relative!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;border-right:0;border-bottom:1px solid #d9e4f0}[data-testid="stSidebarContent"]{padding:12px!important;overflow:visible}[data-testid="stSidebarUserContent"]{padding:0!important}[data-testid="stSidebar"] [role="radiogroup"]{flex-direction:row;flex-wrap:wrap}.sidebar-brand{margin:0 0 8px}[data-testid="stMain"]{overflow:visible;min-height:0}}
 
 /* existing output and mode2 compatibility */
 .app-head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin:0 0 16px;padding:0 0 15px;border-bottom:1px solid var(--line)}.app-brand{display:flex;gap:11px;align-items:center}.app-logo{width:38px;height:38px;border-radius:9px;background:#0f2747;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800}.app-title{font-size:1.35rem;font-weight:800;color:#10294b}.app-sub{font-size:.79rem;color:#60728c;margin-top:2px}.live-chip{background:#eef6ff;border:1px solid #cfe3ff;border-radius:9px;padding:7px 11px;font-size:.73rem;color:#1769c2;white-space:nowrap}

@@ -1,6 +1,7 @@
 import streamlit as st
 from core_logic import MAX_CONCURRENT, QUEUE_POLL_SECONDS, acquire_slot, ensure_session_id, release_slot, waiting_status
 from ui_style import APP_CSS
+from ui_compact import COMPACT_UI_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
@@ -11,9 +12,10 @@ st.set_page_config(
     page_title="지역경제활성화 자동 집계 시스템",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
+st.markdown(COMPACT_UI_CSS, unsafe_allow_html=True)
 
 
 def render_waiting_room():
@@ -53,21 +55,21 @@ with st.sidebar:
 
 active_count, waiting_count, _ = waiting_status()
 
-if mode.startswith("자료"):
-    st.markdown(
+is_preparation = mode.startswith("자료")
+page_title = "지역경제 활성화 계약자료 주소 정리" if is_preparation else "반기보고서 최종작성"
+page_subtitle = "계약자료의 주소를 자동으로 조회하고, 쉽고 빠르게 보완할 수 있습니다." if is_preparation else "검토 완료된 파일로 반기보고서 최종 양식을 자동 생성합니다."
+page_guide = "엑셀 파일을 업로드하고, 아래 순서에 따라 진행해 주세요." if is_preparation else "검토파일과 보고 정보를 확인한 뒤 최종 보고서를 내려받으세요."
+st.markdown(
         f'''<div class="standard-hero">
             <div class="hero-left"><div class="hero-building"><svg viewBox="0 0 54 54" width="48" height="48" fill="currentColor" aria-hidden="true"><path d="M15 3h25v48H15zM5 18h10v33H5zM40 25h9v26h-9z"/><path fill="white" d="M21 9h5v5h-5zm11 0h4v5h-4zM21 20h5v5h-5zm11 0h4v5h-4zM21 31h5v5h-5zm11 0h4v5h-4zM24 42h8v9h-8zM8 24h4v4H8zm0 10h4v4H8zm34-2h4v4h-4zm0 10h4v4h-4z"/></svg></div><div>
-                <div class="hero-title">지역경제 활성화 계약자료 주소 정리</div>
-                <div class="hero-sub">계약자료의 주소를 자동으로 조회하고, 쉽고 빠르게 보완할 수 있습니다.</div>
+                <div class="hero-title">{page_title}</div>
+                <div class="hero-sub">{page_subtitle}</div>
             </div></div>
-            <div class="hero-info"><span>i</span><div>엑셀 파일을 업로드하고, 아래 순서에 따라 진행해 주세요.<small>v{APP_VERSION} · {DEPLOY_DATE} · 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</small></div></div>
+            <div class="hero-info"><span>i</span><div>{page_guide}<small>v{APP_VERSION} · {DEPLOY_DATE} · 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</small></div></div>
         </div>''',
         unsafe_allow_html=True,
     )
+if is_preparation:
     render_mode1()
 else:
-    st.markdown(
-        f'''<div class="app-head"><div class="app-brand"><div class="app-logo">▦</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">검토 완료 기초자료 재업로드 · 최종 4시트 보고서</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
-        unsafe_allow_html=True,
-    )
     render_mode2()

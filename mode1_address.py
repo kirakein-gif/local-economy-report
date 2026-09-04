@@ -47,6 +47,27 @@ def _lookup_one_business(biz):
     return biz, *get_address_from_public_apis(biz)
 
 
+def _set_manual_address(input_key, address):
+    """개별 이전주소 버튼에서 주소 입력칸을 채웁니다."""
+    st.session_state[input_key] = address
+
+
+def _load_all_previous_addresses(rows):
+    """현재 미확인 목록의 공동 DB 주소를 입력칸까지만 일괄 불러옵니다."""
+    loaded = 0
+    for row in rows:
+        previous = str(row.get('이전 입력주소', '') or '').strip()
+        if not previous:
+            continue
+        input_key = f'manual_addr_input_{row["_source_idx"]}'
+        # 사용자가 이미 직접 입력한 값은 덮어쓰지 않습니다.
+        if str(st.session_state.get(input_key, '') or '').strip():
+            continue
+        st.session_state[input_key] = previous
+        loaded += 1
+    st.session_state.bulk_previous_notice = loaded
+
+
 def render_address_tools(ctx):
     df = ctx['df']
     col_addr = ctx['col_addr']
@@ -155,13 +176,34 @@ def render_address_tools(ctx):
                 'Bizno 조회': _bizno_url(biz_display),
             })
 
+        previous_count = sum(1 for row in rows if str(row['이전 입력주소'] or '').strip())
+
         with st.expander(f'주소 미확인 업체 확인 · {len(rows)}개', expanded=False):
             st.caption(
                 '공동 DB에 이전 입력주소가 있으면 주소 자체가 버튼으로 표시됩니다. '
-                '주소를 누르면 오른쪽 주소 입력란에 즉시 채워집니다. 필요하면 수정한 뒤 아래 적용 버튼을 누르세요.'
+                '한 건씩 눌러도 되고, 아래 버튼으로 이전 주소를 한꺼번에 입력칸에 불러올 수도 있습니다. '
+                '불러온 뒤 확인·수정하고 마지막에 적용하세요.'
             )
 
-            # data_editor 대신 행별 위젯을 사용해 이전 주소 자체를 실제 클릭 버튼으로 제공합니다.
+            if previous_count:
+                st.button(
+                    f'이전 주소 한꺼번에 불러오기 · {previous_count}개',
+                    key='load_all_previous_addresses',
+                    on_click=_load_all_previous_addresses,
+                    args=(rows,),
+                    width='stretch',
+                    help='공동 주소정보에 있는 이전 주소를 주소 입력칸까지만 채웁니다. 이미 직접 입력한 값은 덮어쓰지 않습니다.',
+                )
+                bulk_notice = st.session_state.pop('bulk_previous_notice', None)
+                if bulk_notice is not None:
+                    if bulk_notice:
+                        st.success(f'공동 주소정보에서 {bulk_notice}개 업체의 이전 주소를 불러왔습니다. 내용을 확인한 뒤 입력한 주소 적용을 눌러주세요.')
+                    else:
+                        st.info('불러올 새 이전 주소가 없습니다. 이미 입력된 주소는 그대로 유지했습니다.')
+            else:
+                st.caption('현재 미확인 업체 중 공동 주소정보에 저장된 이전 주소는 없습니다.')
+
+            # 행별 위젯을 사용해 이전 주소 자체를 실제 클릭 버튼으로 제공합니다.
             h1, h2, h3, h4, h5 = st.columns([1.25, 0.9, 2.25, 0.8, 2.25], gap='small')
             h1.markdown('**업체명**')
             h2.markdown('**사업자번호**')
@@ -178,14 +220,14 @@ def render_address_tools(ctx):
                 c2.write(row['사업자번호'])
 
                 if previous:
-                    if c3.button(
+                    c3.button(
                         previous,
                         key=f'use_previous_addr_{idx}',
                         help='클릭하면 이 주소를 오른쪽 주소 입력란에 채웁니다.',
                         width='stretch',
-                    ):
-                        st.session_state[input_key] = previous
-                        st.rerun()
+                        on_click=_set_manual_address,
+                        args=(input_key, previous),
+                    )
                 else:
                     c3.caption('기록 없음')
 
@@ -216,7 +258,7 @@ def render_address_tools(ctx):
                         df.iat[idx, col_addr] = new_addr
                     applied += 1
 
-                    # 이전 주소 버튼으로 채운 값은 이미 공유 DB에 있으므로 같은 주소면 다시 저장하지 않습니다.
+                    # 이전 주소 버튼/일괄 불러오기로 채운 값은 이미 공유 DB에 있으므로 같은 주소면 다시 저장하지 않습니다.
                     previous = str(row['이전 입력주소'] or '').strip()
                     if len(biz) == 10 and new_addr != previous:
                         ok, message = save_manual_address(biz, new_addr, company)

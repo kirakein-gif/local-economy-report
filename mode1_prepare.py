@@ -13,7 +13,7 @@ from core_logic import (
     normalize_biz_no,
     normalize_contract_type,
 )
-from ui_components import filter_controls_component
+from ui_components import filter_controls_component, address_workflow_component
 
 
 def _detect_region_from_addresses(df, col_addr):
@@ -50,14 +50,14 @@ def prepare_mode1():
     st.session_state.setdefault('region_mode', '자동 선택')
     st.session_state.setdefault('manual_target_region', CHUNGNAM_REGIONS[0])
 
-    left, right = st.columns([1.62, 1], gap='medium')
+    left, right = st.columns([1.70, 1], gap='small')
 
     with left:
         with st.container(border=True, key='upload_card'):
             st.markdown(
                 '''<div class="panel-head"><div class="panel-icon blue-icon">▤</div><div>
                 <div class="panel-title">자료 입력</div>
-                <div class="panel-desc">계약자료 Excel 파일을 업로드하세요. <b>(여러 파일 가능)</b></div></div></div>''',
+                <div class="panel-desc">계약자료 엑셀 파일을 업로드하세요. <b>(여러 파일 가능)</b></div></div></div>''',
                 unsafe_allow_html=True,
             )
             data_files = st.file_uploader(
@@ -66,25 +66,13 @@ def prepare_mode1():
                 accept_multiple_files=True,
                 key='source_files',
                 label_visibility='collapsed',
-            )
-            if not data_files:
-                st.markdown(
-                    '''<div class="drop-guide"><div class="drop-cloud">☁</div>
-                    <b>여기에 파일을 드래그하거나 클릭하여 업로드하세요</b>
-                    <span>Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다.</span></div>''',
-                    unsafe_allow_html=True,
-                )
-            st.markdown(
-                '''<div class="source-path-guide"><span class="path-info">●</span>
-                <b>파일 다운로드 경로 :</b>&nbsp; 학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리<br>
-                <small>해당 메뉴에서 Excel 파일을 내려받아 업로드하세요.</small></div>''',
-                unsafe_allow_html=True,
+                help='파일 다운로드 경로: 학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리',
             )
             st.markdown(
                 '''<div class="upload-checks">
-                <span>● 여러 파일을 한 번에 업로드하면 자동으로 합산됩니다.</span>
-                <span>● 파일을 드래그해서 놓아도 업로드할 수 있습니다.</span>
-                <span>● 업로드한 파일은 현재 작업 중에만 임시 사용됩니다.</span></div>''',
+                <span>✓ 파일 다운로드 경로: 학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리</span>
+                <span>✓ 파일을 드래그해서 놓아도 업로드할 수 있습니다.</span>
+                <span>✓ 업로드한 파일은 현재 작업 중에만 임시 사용됩니다.</span></div>''',
                 unsafe_allow_html=True,
             )
 
@@ -148,6 +136,10 @@ def prepare_mode1():
         st.session_state.manual_target_region = component_manual
     st.session_state.amount_number = max(0, component_amount)
 
+    # Publish changed component values back to the UI in the same interaction.
+    if (component_mode, component_manual, max(0, component_amount)) != (current_mode, current_manual, current_amount):
+        st.rerun()
+
     target_region = (
         st.session_state.manual_target_region
         if st.session_state.region_mode == '직접 선택'
@@ -156,6 +148,12 @@ def prepare_mode1():
     target_amount = int(st.session_state.amount_number)
 
     if not data_files:
+        # Keep the workflow visible before upload, with no actionable data.
+        address_workflow_component(
+            data={'empty': True}, key='mode1_address_empty', width='stretch',
+            on_api_change=lambda: None, on_bulk_change=lambda: None,
+            on_manual_change=lambda: None,
+        )
         st.stop()
 
     df = st.session_state.df

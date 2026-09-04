@@ -1,138 +1,41 @@
 COMPACT_UI_CSS = r'''
 <style>
-/* v1.6 — 기준 시안에 맞춘 native Streamlit 영역 보정 */
-.block-container{
-  max-width:1580px!important;
-  padding-top:.8rem!important;
-  padding-bottom:1.4rem!important;
-  padding-left:1.35rem!important;
-  padding-right:1.35rem!important;
-}
-.standard-hero{margin:0 0 15px!important;min-height:82px!important}
-.hero-building{width:56px!important;height:56px!important;font-size:2.35rem!important}
-.hero-title{font-size:1.9rem!important;line-height:1.12!important}
-.hero-sub{font-size:.96rem!important;margin-top:5px!important}
-.hero-info{padding:12px 16px!important;max-width:430px!important;font-size:.82rem!important}
-.hero-info small{font-size:.68rem!important;margin-top:3px!important}
-
-/* 자료입력 카드 */
-.st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"]{
-  min-height:0!important;
-  height:365px!important;
-  border-color:#d7e3f0!important;
-  border-radius:12px!important;
-  box-shadow:0 2px 8px rgba(44,86,133,.035)!important;
-}
-.st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"]>div{padding:1rem 1.1rem!important}
-.panel-head{margin-bottom:10px!important;gap:13px!important}
-.panel-icon{width:46px!important;height:46px!important;font-size:1.5rem!important}
-.panel-title{font-size:1.45rem!important;font-weight:900!important}
-.panel-desc{font-size:.87rem!important;margin-top:4px!important}
-
-/* 파일 업로더 — Streamlit 기능은 유지하되 시안처럼 크게 */
-.st-key-upload_card [data-testid="stFileUploaderDropzone"],
-.st-key-upload_card [data-testid="stFileUploadDropzone"]{
-  min-height:174px!important;
-  height:174px!important;
-  background:#fcfdff!important;
-  border:1.5px dashed #bfd0e3!important;
-  border-radius:10px!important;
-  padding:1rem!important;
-}
-.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]{
-  display:none!important;
-}
-.st-key-upload_card [data-testid="stFileUploaderDropzone"] button,
-.st-key-upload_card [data-testid="stFileUploadDropzone"] button{
-  min-height:42px!important;
-  border-radius:8px!important;
-  background:#fff!important;
-  color:#153a63!important;
-  border:1px solid #cbd8e6!important;
-  font-size:.86rem!important;
-  font-weight:800!important;
-}
-.drop-guide{
-  margin-top:-126px!important;
-  position:relative!important;
-  z-index:1!important;
-  pointer-events:none!important;
-  text-align:center!important;
-}
-.drop-guide .drop-cloud{font-size:2.1rem!important;margin-bottom:6px!important}
-.drop-guide b{font-size:.95rem!important}
-.drop-guide span{font-size:.78rem!important;margin-top:5px!important}
-.source-path-guide{
-  margin-top:78px!important;
-  padding:9px 12px!important;
-  font-size:.78rem!important;
-  line-height:1.5!important;
-}
-.source-path-guide small{font-size:.7rem!important}
-.upload-checks{
-  margin-top:8px!important;
-  gap:4px!important;
-  font-size:.76rem!important;
-  line-height:1.38!important;
-}
-/* 업로드 후에는 파일칩을 우선하고 오버레이 제거 */
-.st-key-upload_card:has([data-testid="stFileUploaderFile"]) .drop-guide,
-.st-key-upload_card:has([data-testid="stFileUploaderFileName"]) .drop-guide{display:none!important}
-.st-key-upload_card:has([data-testid="stFileUploaderFile"]) .source-path-guide,
-.st-key-upload_card:has([data-testid="stFileUploaderFileName"]) .source-path-guide{margin-top:10px!important}
-
-/* 커스텀 컴포넌트와 주변 Streamlit 블록 간 간격 */
-.st-key-mode1_filter_controls_v2{margin:0!important}
-.st-key-mode1_address_workflow_v2{margin-top:10px!important;margin-bottom:4px!important}
-
-/* 알림과 상세입력 */
-[data-testid="stAlert"]{font-size:.86rem!important;padding:.68rem .82rem!important;border-radius:8px!important}
-[data-testid="stExpander"]{border-radius:9px!important;border-color:#cfdcea!important}
-[data-testid="stExpander"] summary{font-size:.9rem!important;font-weight:760!important}
-[data-testid="stExpander"] input{font-size:.86rem!important;min-height:40px!important}
-[data-testid="stExpander"] p,[data-testid="stExpander"] .stCaption{font-size:.8rem!important}
-
-/* 지역별 구매 비중 */
-.region-card{margin-top:10px!important;padding:13px 15px!important;border-radius:10px!important}
-.region-card .work-title{font-size:1.03rem!important;font-weight:850!important}
-.region-track{height:9px!important;margin:11px 0 9px!important}
-.region-legend{font-size:.8rem!important;gap:20px!important}
-
-/* 결과 파일 */
-.section-title{font-size:1.18rem!important;font-weight:900!important;margin:14px 0 8px!important}
-.card-title{font-size:1.02rem!important;font-weight:850!important;line-height:1.2!important}
-.card-desc{font-size:.78rem!important;line-height:1.45!important;margin-top:3px!important}
-.small-file-icon{width:38px!important;height:38px!important;font-size:1rem!important}
-div.stDownloadButton>button{
-  min-height:44px!important;
-  font-size:.9rem!important;
-  font-weight:800!important;
-}
-.result-step-box{
-  border:1px solid #dbe7f4;
-  background:#f8fbff;
-  border-radius:8px;
-  padding:8px 10px;
-  margin-top:7px;
-}
-.result-step-box b{display:block;font-size:.84rem;color:#143a65;line-height:1.3}
-.result-step-box span{display:block;font-size:.72rem;color:#647b96;line-height:1.4;margin-top:2px}
-
-/* 공통 native 버튼/입력은 지나치게 작지 않게 */
-div.stButton>button{font-size:.86rem!important;min-height:40px!important}
-[data-testid="stNumberInput"] input,[data-baseweb="select"]>div{font-size:.86rem!important}
-
-/* 사이드바는 콘텐츠보다 한 단계 작게 유지 */
-[data-testid="stSidebar"] label,[data-testid="stSidebar"] p{font-size:.82rem!important}
-
-@media(max-width:1100px){
-  .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"]{height:auto!important}
-  .hero-title{font-size:1.55rem!important}
-  .hero-info{max-width:360px!important}
-}
-@media(max-width:760px){
-  .standard-hero{display:block!important}
-  .hero-info{margin-top:10px!important;max-width:none!important}
-}
+[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style){display:none}
+/* Mode 1 native surfaces. Component styles live in ui_components.py. */
+.block-container{max-width:1580px;padding:16px 22px 28px!important}
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{gap:16px}
+.standard-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:59px;margin-bottom:10px}
+.hero-left{display:flex;align-items:center;gap:16px;min-width:0}
+.hero-building{width:54px;flex:0 0 54px;color:#10294d;font-size:48px;font-weight:900;line-height:1}
+.hero-title{font-size:28px;font-weight:850;line-height:1.25;letter-spacing:-.04em}
+.hero-sub{font-size:16px;color:#496789;margin-top:4px}
+.hero-info{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid #c9e0ff;border-radius:11px;background:#eef6ff;color:#315a91;font-size:14px}
+.hero-info>span{display:grid;place-items:center;width:22px;height:22px;flex-shrink:0;border-radius:50%;background:#1677f2;color:white;font-weight:800}
+.hero-info small{display:none}
+.st-key-upload_card{min-height:430px;padding:14px 22px 16px;border:1px solid #d9e4f0;border-radius:11px;background:#fff;box-shadow:0 2px 5px #10294d06;gap:10px}
+.panel-head{display:flex;align-items:center;gap:22px;margin:0 3px 4px}
+.panel-icon{display:grid;place-items:center;width:40px;height:48px;flex-shrink:0;border-radius:4px;background:#1677f2;color:white;font-size:36px}
+.panel-title{font-size:27px;line-height:1.25;font-weight:850;color:#10294d}
+.panel-desc{font-size:16px;color:#496789;margin-top:4px}.panel-desc b{font-weight:400}
+.st-key-upload_card [data-testid="stFileUploaderDropzone"]{display:flex;flex-direction:column;justify-content:center;gap:16px;min-height:232px;padding:20px;border:1px dashed #c5d3e5;border-radius:11px;background:#f9fbfd;text-align:center}
+.st-key-upload_card [data-testid="stFileUploaderDropzone"]>span{order:2;display:flex;justify-content:center;width:100%}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]{display:flex;flex-direction:column;align-items:center;gap:6px;margin:0;width:100%}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]>div{font-size:0}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]>div>span{display:none}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]:before{content:'';width:56px;height:48px;background:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA1NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTY3N2YyIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwIDQxSDE2YTEyIDEyIDAgMCAxLTEtMjQgMTcgMTcgMCAwIDEgMzMtMSAxMiAxMiAwIDAgMSAxIDI1aC01TTMyIDQ4VjI3bS05IDggOS05IDkgOSIvPjwvc3ZnPg==') center/contain no-repeat;margin-bottom:9px}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]:after{content:'여기에 파일을 드래그하거나 클릭하여 업로드하세요';font-size:18px;font-weight:750;color:#123b76;order:1}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]>div{order:2}
+.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]>div:after{content:'Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다.';font-size:14px;color:#496789}
+.st-key-upload_card [data-testid="stFileUploaderDropzone"] > span button{min-height:48px;padding:0 24px;background:white;border:1px solid #d2deed;border-radius:10px;color:#10294d}
+.st-key-upload_card [data-testid="stFileUploaderDropzone"] > span button p{font-size:0}
+.st-key-upload_card [data-testid="stFileUploaderDropzone"] > span button p:after{content:'파일 선택하기';font-size:17px;font-weight:750}
+.upload-checks{display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:1.55;color:#496789}
+.upload-checks span::first-letter{color:#1677f2;font-weight:900}
+div.stButton>button,div.stDownloadButton>button{border-radius:8px;min-height:44px;font-weight:750}
+div.stButton>button[kind="primary"],div.stDownloadButton>button{background:#1677f2;color:#fff;border-color:#1677f2}
+.result-step-box{padding:10px;border:1px solid #d9e4f0;border-radius:8px;background:#f8fbff}
+.result-step-box b,.result-step-box span{display:block}.result-step-box span{font-size:13px;color:#647b96}
+@media(max-width:1100px){.standard-hero{align-items:flex-start}.hero-title{font-size:23px}.hero-info{max-width:340px;font-size:12px}.hero-sub{font-size:14px}.panel-desc{font-size:14px}}
+@media(max-width:800px){.standard-hero{flex-direction:column}.hero-info{max-width:none}.st-key-upload_card{min-height:0;padding:16px}.block-container{padding:16px 12px!important}.hero-title{font-size:22px}.hero-building{width:38px;flex-basis:38px}.st-key-upload_card [data-testid="stFileUploaderDropzoneInstructions"]>span:after{font-size:15px}[data-testid="stHorizontalBlock"]:has(.st-key-upload_card){flex-direction:column}[data-testid="stHorizontalBlock"]:has(.st-key-upload_card)>[data-testid="stColumn"]{width:100%;flex:1 1 100%}}
 </style>
 '''

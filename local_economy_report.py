@@ -1,7 +1,6 @@
 import streamlit as st
 from core_logic import MAX_CONCURRENT, QUEUE_POLL_SECONDS, acquire_slot, ensure_session_id, release_slot, waiting_status
 from ui_style import APP_CSS
-from ui_compact import COMPACT_UI_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
@@ -12,10 +11,9 @@ st.set_page_config(
     page_title="지역경제활성화 자동 집계 시스템",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
-st.markdown(COMPACT_UI_CSS, unsafe_allow_html=True)
 
 
 def render_waiting_room():
@@ -58,7 +56,7 @@ active_count, waiting_count, _ = waiting_status()
 if mode.startswith("자료"):
     st.markdown(
         f'''<div class="standard-hero">
-            <div class="hero-left"><div class="hero-building">▦</div><div>
+            <div class="hero-left"><div class="hero-building"><svg viewBox="0 0 54 54" width="48" height="48" fill="currentColor" aria-hidden="true"><path d="M15 3h25v48H15zM5 18h10v33H5zM40 25h9v26h-9z"/><path fill="white" d="M21 9h5v5h-5zm11 0h4v5h-4zM21 20h5v5h-5zm11 0h4v5h-4zM21 31h5v5h-5zm11 0h4v5h-4zM24 42h8v9h-8zM8 24h4v4H8zm0 10h4v4H8zm34-2h4v4h-4zm0 10h4v4h-4z"/></svg></div><div>
                 <div class="hero-title">지역경제 활성화 계약자료 주소 정리</div>
                 <div class="hero-sub">계약자료의 주소를 자동으로 조회하고, 쉽고 빠르게 보완할 수 있습니다.</div>
             </div></div>

@@ -16,6 +16,15 @@ from core_logic import (
 
 QUICK_AMOUNTS = [0, 100000, 500000, 1000000]
 AMOUNT_SLIDER_MAX = 10000000
+# 작은 금액 구간을 넓게 쓰는 비선형 슬라이더 기준점: 화면 위치(%) -> 실제 금액
+AMOUNT_SCALE_POINTS = [
+    (0, 0),
+    (20, 100000),
+    (45, 500000),
+    (65, 1000000),
+    (82, 3000000),
+    (100, 10000000),
+]
 
 
 def _detect_region_from_addresses(df, col_addr):
@@ -34,19 +43,41 @@ def _detect_region_from_addresses(df, col_addr):
     return max(counts.items(), key=lambda item: item[1])
 
 
+def _amount_from_slider_pos(pos):
+    pos = max(0, min(100, int(pos)))
+    for i in range(len(AMOUNT_SCALE_POINTS) - 1):
+        p1, a1 = AMOUNT_SCALE_POINTS[i]
+        p2, a2 = AMOUNT_SCALE_POINTS[i + 1]
+        if p1 <= pos <= p2:
+            ratio = (pos - p1) / (p2 - p1) if p2 != p1 else 0
+            return int(round((a1 + (a2 - a1) * ratio) / 10000) * 10000)
+    return AMOUNT_SLIDER_MAX
+
+
+def _slider_pos_from_amount(amount):
+    amount = max(0, min(AMOUNT_SLIDER_MAX, int(amount or 0)))
+    for i in range(len(AMOUNT_SCALE_POINTS) - 1):
+        p1, a1 = AMOUNT_SCALE_POINTS[i]
+        p2, a2 = AMOUNT_SCALE_POINTS[i + 1]
+        if a1 <= amount <= a2:
+            ratio = (amount - a1) / (a2 - a1) if a2 != a1 else 0
+            return int(round(p1 + (p2 - p1) * ratio))
+    return 100
+
+
 def _set_amount(value):
     value = int(value)
     st.session_state.amount_number = value
-    st.session_state.amount_slider = min(value, AMOUNT_SLIDER_MAX)
+    st.session_state.amount_slider_pos = _slider_pos_from_amount(value)
 
 
 def _sync_amount_from_slider():
-    st.session_state.amount_number = int(st.session_state.amount_slider)
+    st.session_state.amount_number = _amount_from_slider_pos(st.session_state.amount_slider_pos)
 
 
 def _sync_amount_from_number():
     value = int(st.session_state.amount_number or 0)
-    st.session_state.amount_slider = min(max(value, 0), AMOUNT_SLIDER_MAX)
+    st.session_state.amount_slider_pos = _slider_pos_from_amount(value)
 
 
 def prepare_mode1():
@@ -57,45 +88,10 @@ def prepare_mode1():
 
     if 'amount_number' not in st.session_state:
         st.session_state.amount_number = int(DEFAULT_TARGET_AMOUNT)
-    if 'amount_slider' not in st.session_state:
-        st.session_state.amount_slider = min(int(DEFAULT_TARGET_AMOUNT), AMOUNT_SLIDER_MAX)
+    if 'amount_slider_pos' not in st.session_state:
+        st.session_state.amount_slider_pos = _slider_pos_from_amount(st.session_state.amount_number)
     if 'region_mode' not in st.session_state:
         st.session_state.region_mode = '자동 선택'
-
-    # 실제 배포 화면 캡처를 기준으로 한 2차 픽셀 보정.
-    # 기능은 Streamlit 기본 위젯을 유지하되 카드 높이/여백/업로더/주소보완 연결감을 표준 시안에 맞춥니다.
-    st.markdown(
-        '''<style>
-        .block-container{padding-top:.75rem!important}
-        .standard-hero{margin-bottom:12px!important}
-        .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"],
-        .st-key-filter_card [data-testid="stVerticalBlockBorderWrapper"]{min-height:0!important;height:420px!important}
-        .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"]>div,
-        .st-key-filter_card [data-testid="stVerticalBlockBorderWrapper"]>div{padding:.78rem .95rem!important}
-        .st-key-upload_card [data-testid="stFileUploaderDropzone"],
-        .st-key-upload_card [data-testid="stFileUploadDropzone"]{min-height:165px!important;height:165px!important;margin-top:2px!important}
-        .st-key-upload_card [data-testid="stFileUploader"]{margin-bottom:0!important}
-        .source-path-guide{margin-top:12px!important}
-        .upload-checks{margin-top:8px!important;gap:2px!important}
-        .filter-title-row{padding-bottom:8px!important;margin-bottom:8px!important}
-        .filter-divider{margin-top:8px!important;margin-bottom:8px!important}
-        .st-key-filter_card [data-testid="stSlider"]{margin-top:4px!important}
-        .address-head-row{margin-top:12px!important;margin-bottom:10px!important;align-items:center!important}
-        .address-head-left{min-height:70px!important}
-        .address-missing-card,.address-complete-card{min-width:320px!important;min-height:70px!important;padding:10px 16px!important}
-        .st-key-api_address_card [data-testid="stVerticalBlockBorderWrapper"],
-        .st-key-user_address_card [data-testid="stVerticalBlockBorderWrapper"],
-        .st-key-manual_address_card [data-testid="stVerticalBlockBorderWrapper"]{min-height:236px!important;height:236px!important}
-        .step-card-desc{min-height:48px!important;margin-bottom:5px!important}
-        .step-count{margin-top:6px!important;padding:7px 10px!important}
-        .workflow-strip{margin-top:9px!important;margin-bottom:8px!important}
-        @media(max-width:1100px){
-          .st-key-upload_card [data-testid="stVerticalBlockBorderWrapper"],
-          .st-key-filter_card [data-testid="stVerticalBlockBorderWrapper"]{height:auto!important;min-height:0!important}
-        }
-        </style>''',
-        unsafe_allow_html=True,
-    )
 
     left, right = st.columns([1.62, 1], gap='medium')
 
@@ -111,7 +107,6 @@ def prepare_mode1():
                 '자료관리목록 Excel', type=['xlsx', 'xls'], accept_multiple_files=True,
                 key='source_files', label_visibility='collapsed',
             )
-            # 업로드 전에는 큰 드래그 안내를 보여주고, 업로드 후에는 Streamlit 파일칩과 겹치지 않도록 제거합니다.
             if not data_files:
                 st.markdown(
                     '''<div class="drop-guide"><div class="drop-cloud">☁</div>
@@ -196,18 +191,33 @@ def prepare_mode1():
 
             st.markdown('<div class="filter-divider"></div>', unsafe_allow_html=True)
             st.markdown('<div class="field-title">집계 기준 금액 <span>(원 이상)</span> <span class="field-info">i</span></div>', unsafe_allow_html=True)
-            q1, q2, q3, q4, q5 = st.columns([0.75, 0.85, 0.85, 0.9, 1.42], gap='small')
+            q1, q2, q3, q4, q5 = st.columns([0.8, 0.85, 0.85, 0.9, 1.7], gap='small')
             for colbox, label, value in [(q1,'0원',0),(q2,'10만원',100000),(q3,'50만원',500000),(q4,'100만원',1000000)]:
-                colbox.button(label, key=f'quick_amount_{value}', on_click=_set_amount, args=(value,), width='stretch',
-                              type='primary' if int(st.session_state.amount_number) == value else 'secondary')
+                colbox.button(
+                    label, key=f'quick_amount_{value}', on_click=_set_amount, args=(value,), width='stretch',
+                    type='primary' if int(st.session_state.amount_number) == value else 'secondary'
+                )
             with q5:
                 st.markdown('<div class="direct-input-label">직접 입력</div>', unsafe_allow_html=True)
-                st.number_input('직접 입력', min_value=0, step=10000, key='amount_number', on_change=_sync_amount_from_number,
-                                format='%d', label_visibility='collapsed', help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.')
-            st.slider('금액 슬라이더', min_value=0, max_value=AMOUNT_SLIDER_MAX, step=100000,
-                      key='amount_slider', on_change=_sync_amount_from_slider, label_visibility='collapsed')
+                st.number_input(
+                    '직접 입력', min_value=0, step=10000, key='amount_number', on_change=_sync_amount_from_number,
+                    format='%d', label_visibility='collapsed', help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.'
+                )
+
+            st.slider(
+                '금액 슬라이더', min_value=0, max_value=100, step=1,
+                key='amount_slider_pos', on_change=_sync_amount_from_slider, label_visibility='collapsed',
+                help='작은 금액 구간을 더 넓게 조정할 수 있도록 비선형 눈금을 사용합니다.'
+            )
+            st.markdown(
+                '''<div class="nonlinear-scale"><span>0원</span><span>10만원</span><span>50만원</span><span>100만원</span><span>1,000만원+</span></div>''',
+                unsafe_allow_html=True,
+            )
             target_amount = int(st.session_state.amount_number or 0)
-            st.markdown(f'<div class="slider-caption"><span>0원</span><b>{target_amount:,}원 이상</b><span>{AMOUNT_SLIDER_MAX:,}원+</span></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="slider-caption"><span>작은 금액 구간을 넓게 표시</span><b>현재 {target_amount:,}원 이상</b><span>비선형 눈금</span></div>',
+                unsafe_allow_html=True,
+            )
 
     if not data_files:
         st.stop()

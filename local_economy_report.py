@@ -1,6 +1,7 @@
 import streamlit as st
 from core_logic import MAX_CONCURRENT, QUEUE_POLL_SECONDS, acquire_slot, ensure_session_id, release_slot, waiting_status
 from ui_style import APP_CSS
+from ui_compact import COMPACT_UI_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
@@ -14,6 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
+st.markdown(COMPACT_UI_CSS, unsafe_allow_html=True)
 
 
 def render_waiting_room():

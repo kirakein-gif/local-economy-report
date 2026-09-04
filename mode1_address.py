@@ -152,59 +152,73 @@ def render_address_tools(ctx):
                 '업체명': company or '정보없음',
                 '사업자번호': biz_display,
                 '이전 입력주소': previous or '',
-                '이전주소 사용': False,
                 'Bizno 조회': _bizno_url(biz_display),
-                '주소 수동 입력': '',
             })
 
-        edit_df = pd.DataFrame(rows).set_index('_source_idx')
-        with st.expander(f'주소 미확인 업체 확인 · {len(edit_df)}개', expanded=False):
+        with st.expander(f'주소 미확인 업체 확인 · {len(rows)}개', expanded=False):
             st.caption(
-                '공동 DB에 같은 사업자번호의 주소가 있으면 이전 입력주소에 표시됩니다. '
-                '사용하려면 해당 행의 「이전주소 사용」을 체크하세요. 새 주소는 Bizno 조회 후 직접 입력할 수 있습니다.'
+                '공동 DB에 이전 입력주소가 있으면 주소 자체가 버튼으로 표시됩니다. '
+                '주소를 누르면 오른쪽 주소 입력란에 즉시 채워집니다. 필요하면 수정한 뒤 아래 적용 버튼을 누르세요.'
             )
-            edited = st.data_editor(
-                edit_df,
-                disabled=['업체명', '사업자번호', '이전 입력주소', 'Bizno 조회'],
-                column_config={
-                    '업체명': st.column_config.TextColumn('업체명', width='medium'),
-                    '사업자번호': st.column_config.TextColumn('사업자번호', width='small'),
-                    '이전 입력주소': st.column_config.TextColumn('이전 입력주소', width='large'),
-                    '이전주소 사용': st.column_config.CheckboxColumn(
-                        '이전주소 사용',
-                        help='체크하면 왼쪽의 이전 입력주소를 현재 자료에 적용합니다.',
-                        width='small',
-                    ),
-                    'Bizno 조회': st.column_config.LinkColumn('Bizno 조회', display_text='조회하기', width='small'),
-                    '주소 수동 입력': st.column_config.TextColumn('주소 입력', width='large'),
-                },
-                width='stretch',
-                height=min(360, 90 + max(1, min(len(edit_df), 8)) * 35),
-                key='manual_address_editor',
-            )
-            if st.button('선택·입력한 주소 적용', key='apply_manual_address'):
+
+            # data_editor 대신 행별 위젯을 사용해 이전 주소 자체를 실제 클릭 버튼으로 제공합니다.
+            h1, h2, h3, h4, h5 = st.columns([1.25, 0.9, 2.25, 0.8, 2.25], gap='small')
+            h1.markdown('**업체명**')
+            h2.markdown('**사업자번호**')
+            h3.markdown('**이전 입력주소**')
+            h4.markdown('**Bizno 조회**')
+            h5.markdown('**주소 입력**')
+
+            for row in rows:
+                idx = row['_source_idx']
+                previous = row['이전 입력주소']
+                input_key = f'manual_addr_input_{idx}'
+                c1, c2, c3, c4, c5 = st.columns([1.25, 0.9, 2.25, 0.8, 2.25], gap='small', vertical_alignment='center')
+                c1.write(row['업체명'])
+                c2.write(row['사업자번호'])
+
+                if previous:
+                    if c3.button(
+                        previous,
+                        key=f'use_previous_addr_{idx}',
+                        help='클릭하면 이 주소를 오른쪽 주소 입력란에 채웁니다.',
+                        width='stretch',
+                    ):
+                        st.session_state[input_key] = previous
+                        st.rerun()
+                else:
+                    c3.caption('기록 없음')
+
+                c4.link_button('조회하기', row['Bizno 조회'], width='stretch')
+                c5.text_input(
+                    '주소 입력',
+                    key=input_key,
+                    label_visibility='collapsed',
+                    placeholder='주소를 입력하세요',
+                )
+
+            if st.button('입력한 주소 적용', key='apply_manual_address'):
                 applied = 0
                 saved = 0
                 save_errors = []
-                for idx in edited.index:
+                for row in rows:
+                    idx = row['_source_idx']
                     biz = str(biz_norm.at[idx] or '').strip()
                     company = str(df.iat[idx, col_company] if pd.notna(df.iat[idx, col_company]) else '').strip()
-                    previous = str(edited.at[idx, '이전 입력주소'] or '').strip()
-                    use_previous = bool(edited.at[idx, '이전주소 사용'])
-                    new_addr = str(edited.at[idx, '주소 수동 입력'] or '').strip()
-
-                    chosen = new_addr or (previous if use_previous else '')
-                    if not chosen:
+                    new_addr = str(st.session_state.get(f'manual_addr_input_{idx}', '') or '').strip()
+                    if not new_addr:
                         continue
 
                     if len(biz) == 10:
                         mask = biz_norm.eq(biz)
-                        df.loc[mask, df.columns[col_addr]] = chosen
+                        df.loc[mask, df.columns[col_addr]] = new_addr
                     else:
-                        df.iat[idx, col_addr] = chosen
+                        df.iat[idx, col_addr] = new_addr
                     applied += 1
 
-                    if new_addr and len(biz) == 10:
+                    # 이전 주소 버튼으로 채운 값은 이미 공유 DB에 있으므로 같은 주소면 다시 저장하지 않습니다.
+                    previous = str(row['이전 입력주소'] or '').strip()
+                    if len(biz) == 10 and new_addr != previous:
                         ok, message = save_manual_address(biz, new_addr, company)
                         if ok:
                             saved += 1
@@ -219,9 +233,12 @@ def render_address_tools(ctx):
                         'saved': saved,
                         'errors': save_errors,
                     }
+                    # 적용된 행의 임시 입력값은 다음 화면에 남기지 않습니다.
+                    for row in rows:
+                        st.session_state.pop(f'manual_addr_input_{row["_source_idx"]}', None)
                     st.rerun()
                 else:
-                    st.warning('선택하거나 입력한 주소가 없습니다.')
+                    st.warning('입력한 주소가 없습니다.')
 
             notice = st.session_state.pop('manual_address_notice', None)
             if notice:

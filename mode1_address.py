@@ -42,7 +42,7 @@ def _propagate_known_addresses(df, col_addr, biz_norm):
 
 
 def _lookup_one_business(biz):
-    """한 사업자번호는 기존 우선순위(나라장터→공정위→지역화폐)를 그대로 지켜 조회합니다."""
+    """한 사업자번호는 나라장터→학교장터→공정위→지역화폐 순서를 지켜 조회합니다."""
     return biz, *get_address_from_public_apis(biz)
 
 
@@ -69,13 +69,15 @@ def render_address_tools(ctx):
             if not unique_biz:
                 st.info('사업자번호로 조회할 주소가 없습니다.')
             else:
-                progress = st.progress(0, text='공공데이터 API 주소 조회 중...')
+                progress = st.progress(0, text='주소 조회 중...')
                 found_procurement = 0
+                found_s2b = 0
                 found_ftc = 0
                 found_local = 0
                 completed = 0
 
-                # 미러 4개 동시 운영을 고려해 과도한 API 동시 호출을 피하면서 2개 업체씩 처리합니다.
+                # 미러 4개 동시 운영을 고려해 과도한 외부 호출을 피하면서 2개 업체씩 처리합니다.
+                # 각 개별 조회 소스는 24시간 캐시되므로 동일 앱 인스턴스의 반복 조회는 즉시 재사용됩니다.
                 with ThreadPoolExecutor(max_workers=ADDRESS_LOOKUP_WORKERS) as executor:
                     futures = {executor.submit(_lookup_one_business, biz): biz for biz in unique_biz}
                     for future in as_completed(futures):
@@ -90,6 +92,8 @@ def render_address_tools(ctx):
                             df.loc[mask, df.columns[col_addr]] = addr
                             if source == '나라장터':
                                 found_procurement += 1
+                            elif source == '학교장터(S2B)':
+                                found_s2b += 1
                             elif source == '공정위 통신판매사업자':
                                 found_ftc += 1
                             elif source == '지역화폐 가맹점':
@@ -99,23 +103,31 @@ def render_address_tools(ctx):
                         completed += 1
                         progress.progress(
                             completed / len(unique_biz),
-                            text=f'{completed}/{len(unique_biz)}개 업체 조회 · 나라장터 → 공정위 → 지역화폐',
+                            text=(
+                                f'{completed}/{len(unique_biz)}개 업체 조회 · '
+                                '나라장터 → 학교장터 → 공정위 → 지역화폐'
+                            ),
                         )
 
                 _propagate_known_addresses(df, col_addr, biz_norm)
                 st.session_state.df = df
                 st.session_state.address_api_result = {
                     '나라장터': found_procurement,
+                    '학교장터(S2B)': found_s2b,
                     '공정위 통신판매사업자': found_ftc,
                     '지역화폐 가맹점': found_local,
                 }
                 st.rerun()
-        st.caption('주소 없는 업체만 나라장터 → 공정위 통신판매사업자 → 지역화폐 가맹점 순으로 조회 · 사업자번호 정확일치만 반영 · 앱당 최대 2개 업체 동시 조회')
+        st.caption(
+            '주소 없는 업체만 나라장터 → 학교장터(S2B) → 공정위 통신판매사업자 → 지역화폐 가맹점 순으로 조회 · '
+            '사업자번호 정확일치만 반영 · 개별 조회 24시간 캐시 · 앱당 최대 2개 업체 동시 조회'
+        )
         result = st.session_state.pop('address_api_result', None)
         if result:
             total = sum(result.values())
             st.caption(
                 f'최근 조회: {total}개 확인 · 나라장터 {result.get("나라장터", 0)}개 · '
+                f'학교장터 {result.get("학교장터(S2B)", 0)}개 · '
                 f'공정위 {result.get("공정위 통신판매사업자", 0)}개 · '
                 f'지역화폐 {result.get("지역화폐 가맹점", 0)}개'
             )

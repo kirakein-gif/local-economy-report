@@ -4,7 +4,7 @@ from ui_style import APP_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
-APP_VERSION = "1.5.2"
+APP_VERSION = "1.5.3"
 DEPLOY_DATE = "2026.09.04"
 
 st.set_page_config(

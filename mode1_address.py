@@ -21,7 +21,6 @@ def _propagate_known_addresses(df, col_addr, biz_norm):
     """이미 확인된 주소를 동일한 10자리 사업자등록번호의 빈 행에만 자동 전파합니다."""
     addr_series = df.iloc[:, col_addr]
     known_by_biz = {}
-
     for idx in df.index:
         addr = str(addr_series.at[idx] if pd.notna(addr_series.at[idx]) else '').strip()
         biz = str(biz_norm.at[idx] or '').strip()
@@ -110,12 +109,13 @@ def render_address_tools(ctx):
     api_target_count = len([x for x in biz_norm.loc[api_missing_indices].drop_duplicates().tolist() if x])
 
     st.markdown(
-        '''<div class="address-head-row"><div><div class="address-title">● 주소 보완</div>
-        <div class="address-sub">API와 기존 사용자 주소를 활용해 주소를 채운 뒤, 남은 업체만 직접 입력합니다.</div></div>'''
+        '''<div class="address-head-row"><div class="address-head-left">
+        <div class="address-pin">●</div><div><div class="address-title">주소 보완</div>
+        <div class="address-sub">API와 기존 사용자 주소를 활용하여 주소를 채운 후, 남은 업체는 직접 입력합니다.</div></div></div>'''
         + (
-            f'<div class="address-missing-card"><b>주소 미확인 {missing_count:,}건</b><span>중복 업체를 포함한 전체 미확인 계약 건수</span></div>'
+            f'<div class="address-missing-card"><div class="status-icon">▱</div><div><b>주소 미확인 {missing_count:,}건</b><span>(중복 업체를 포함한 전체 미확인 계약 건수)</span></div></div>'
             if missing_count
-            else '<div class="address-complete-card"><b>주소 확인 완료</b><span>집계대상 주소가 모두 확인되었습니다.</span></div>'
+            else '<div class="address-complete-card"><div class="status-icon">✓</div><div><b>주소 확인 완료</b><span>집계대상 주소가 모두 확인되었습니다.</span></div></div>'
         )
         + '</div>',
         unsafe_allow_html=True,
@@ -129,9 +129,8 @@ def render_address_tools(ctx):
     with c1:
         with st.container(border=True, key='api_address_card'):
             st.markdown(
-                f'''<div class="step-card-title blue"><span>1</span> API로 주소 채우기</div>
-                <div class="step-card-desc">나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 조회합니다.<br>사업자번호 10자리 정확일치만 반영합니다.</div>
-                <div class="step-count blue-count">API 조회대상 <b>{api_target_count:,}개 업체</b></div>''',
+                '''<div class="step-card-title blue"><span>1</span> API로 주소 채우기</div>
+                <div class="step-card-desc">나라장터 → 학교장터 → 공정위 → 지역화폐 → 가맹점 순으로 조회<br>사업자번호 정확하지만 반영 · 개별 조회 24시간 캐시</div>''',
                 unsafe_allow_html=True,
             )
             if st.button('⌕  API로 주소 채우기', key='api_fill_button', width='stretch'):
@@ -140,12 +139,7 @@ def render_address_tools(ctx):
                     st.info('사업자번호로 조회할 주소가 없습니다.')
                 else:
                     progress = st.progress(0, text='주소 조회 중...')
-                    found_procurement = 0
-                    found_s2b = 0
-                    found_ftc = 0
-                    found_local = 0
-                    completed = 0
-
+                    found_procurement = found_s2b = found_ftc = found_local = completed = 0
                     with ThreadPoolExecutor(max_workers=ADDRESS_LOOKUP_WORKERS) as executor:
                         futures = {executor.submit(_lookup_one_business, biz): biz for biz in unique_biz}
                         for future in as_completed(futures):
@@ -154,7 +148,6 @@ def render_address_tools(ctx):
                                 _, addr, source = future.result()
                             except Exception:
                                 addr, source = None, None
-
                             if addr:
                                 mask = biz_norm.eq(biz) & missing_address_mask(df.iloc[:, col_addr])
                                 df.loc[mask, df.columns[col_addr]] = addr
@@ -166,14 +159,12 @@ def render_address_tools(ctx):
                                     found_ftc += 1
                                 elif source == '지역화폐 가맹점':
                                     found_local += 1
-
                             touch_slot()
                             completed += 1
                             progress.progress(
                                 completed / len(unique_biz),
                                 text=f'{completed}/{len(unique_biz)}개 업체 조회 · 나라장터 → 학교장터 → 공정위 → 지역화폐',
                             )
-
                     _propagate_known_addresses(df, col_addr, biz_norm)
                     st.session_state.df = df
                     st.session_state.address_api_result = {
@@ -183,33 +174,36 @@ def render_address_tools(ctx):
                         '지역화폐 가맹점': found_local,
                     }
                     st.rerun()
-
-            st.caption('개별 조회 24시간 캐시 · 앱당 최대 2개 업체 동시 조회')
+            st.markdown(
+                f'<div class="step-count blue-count"><span class="count-icon">▦</span><div><b>API 조회대상 {api_target_count:,}개 업체</b><small>(중복 사업자번호 제거 후 실제 조회할 업체 수)</small></div></div>',
+                unsafe_allow_html=True,
+            )
 
     with c2:
         with st.container(border=True, key='user_address_card'):
             st.markdown(
-                f'''<div class="step-card-title green"><span>2</span> 사용자 주소 채우기</div>
-                <div class="step-card-desc">공동 주소정보에서 이전에 입력했던 주소를 한꺼번에 불러옵니다.<br>기존 입력값은 덮어쓰지 않습니다.</div>
-                <div class="step-count green-count">사용자 주소 보유 <b>{previous_count:,}개 업체</b></div>''',
+                '''<div class="step-card-title green"><span>2</span> 사용자 주소 채우기</div>
+                <div class="step-card-desc">공동 주소정보에서 이전에 입력했던 주소를 한꺼번에 불러옵니다.<br>10자리 사업자번호 정확일치만 자동 반영됩니다.</div>''',
                 unsafe_allow_html=True,
             )
             st.button(
-                f'↺  이전 주소 한꺼번에 불러오기 · {previous_count:,}개',
+                f'◉  이전 주소 한꺼번에 불러오기 · {previous_count:,}개',
                 key='bulk_user_address_button',
                 on_click=_load_all_previous_addresses,
                 args=(rows,),
                 width='stretch',
                 disabled=previous_count == 0,
             )
-            st.caption('불러온 주소는 입력칸까지만 채워지며, 마지막 적용 전 수정할 수 있습니다.')
+            st.markdown(
+                f'<div class="step-count green-count"><span class="count-icon">♻</span><div><b>사용자 주소 보유 {previous_count:,}개 업체</b><small>(현재 미확인 업체 중 공동 DB에 주소가 있는 업체 수)</small></div></div>',
+                unsafe_allow_html=True,
+            )
 
     with c3:
         with st.container(border=True, key='manual_address_card'):
             st.markdown(
-                f'''<div class="step-card-title orange"><span>3</span> 남은 주소 직접 입력</div>
-                <div class="step-card-desc">API와 사용자 주소로도 채워지지 않은 업체만 직접 확인합니다.<br>입력 후 한 번에 적용할 수 있습니다.</div>
-                <div class="step-count orange-count">직접 입력 필요 <b>{direct_count:,}개 업체</b></div>''',
+                '''<div class="step-card-title orange"><span>3</span> 남은 주소 직접 입력</div>
+                <div class="step-card-desc">위 과정으로도 주소가 채워지지 않은 업체를 직접 확인하고<br>주소를 입력한 후, 한 번에 적용합니다.</div>''',
                 unsafe_allow_html=True,
             )
             st.button(
@@ -218,7 +212,20 @@ def render_address_tools(ctx):
                 on_click=_open_manual_editor,
                 width='stretch',
             )
-            st.caption('사업자번호가 없는 행은 해당 행에만 적용되고 공동 DB에는 저장되지 않습니다.')
+            st.markdown(
+                f'<div class="step-count orange-count"><span class="count-icon">⇩</span><div><b>직접 입력 필요 {direct_count:,}개 업체</b><small>(API와 사용자 주소로도 채워지지 않은 업체 수)</small></div></div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        '''<div class="workflow-strip"><div class="workflow-label"><span>i</span><b>작업 순서 안내</b></div>
+        <div class="workflow-step"><em>1</em>자료 입력</div><i>→</i>
+        <div class="workflow-step"><em>2</em>API로 주소 채우기</div><i>→</i>
+        <div class="workflow-step"><em>3</em>사용자 주소 채우기</div><i>→</i>
+        <div class="workflow-step"><em>4</em>남은 주소 직접 입력</div><i>→</i>
+        <div class="workflow-step"><em>5</em>입력한 주소 적용 및 결과 다운로드</div></div>''',
+        unsafe_allow_html=True,
+    )
 
     result = st.session_state.pop('address_api_result', None)
     if result:
@@ -238,11 +245,7 @@ def render_address_tools(ctx):
 
     expand_manual = bool(st.session_state.pop('open_manual_editor', False))
     with st.expander(f'주소 미확인 업체 상세 · {len(rows):,}개', expanded=expand_manual):
-        st.caption(
-            '이전 입력주소가 있으면 주소 자체를 눌러 한 건씩 채울 수도 있습니다. '
-            '필요하면 주소를 수정한 뒤 아래의 입력한 주소 적용 버튼을 누르세요.'
-        )
-
+        st.caption('이전 입력주소가 있으면 주소 자체를 눌러 한 건씩 채울 수도 있습니다. 필요하면 주소를 수정한 뒤 아래의 입력한 주소 적용 버튼을 누르세요.')
         h1, h2, h3, h4, h5 = st.columns([1.25, 0.9, 2.25, 0.8, 2.25], gap='small')
         h1.markdown('**업체명**')
         h2.markdown('**사업자번호**')
@@ -257,7 +260,6 @@ def render_address_tools(ctx):
             c1r, c2r, c3r, c4r, c5r = st.columns([1.25, 0.9, 2.25, 0.8, 2.25], gap='small', vertical_alignment='center')
             c1r.write(row['업체명'])
             c2r.write(row['사업자번호'])
-
             if previous:
                 c3r.button(
                     previous,
@@ -269,18 +271,11 @@ def render_address_tools(ctx):
                 )
             else:
                 c3r.caption('기록 없음')
-
             c4r.link_button('조회하기', row['Bizno 조회'], width='stretch')
-            c5r.text_input(
-                '주소 입력',
-                key=input_key,
-                label_visibility='collapsed',
-                placeholder='주소를 입력하세요',
-            )
+            c5r.text_input('주소 입력', key=input_key, label_visibility='collapsed', placeholder='주소를 입력하세요')
 
         if st.button('입력한 주소 적용', key='apply_manual_address', type='primary'):
-            applied = 0
-            saved = 0
+            applied = saved = 0
             save_errors = []
             for row in rows:
                 idx = row['_source_idx']
@@ -289,14 +284,12 @@ def render_address_tools(ctx):
                 new_addr = str(st.session_state.get(f'manual_addr_input_{idx}', '') or '').strip()
                 if not new_addr:
                     continue
-
                 if len(biz) == 10:
                     mask = biz_norm.eq(biz)
                     df.loc[mask, df.columns[col_addr]] = new_addr
                 else:
                     df.iat[idx, col_addr] = new_addr
                 applied += 1
-
                 previous = str(row['이전 입력주소'] or '').strip()
                 if len(biz) == 10 and new_addr != previous:
                     ok, message = save_manual_address(biz, new_addr, company)
@@ -308,11 +301,7 @@ def render_address_tools(ctx):
             if applied:
                 _propagate_known_addresses(df, col_addr, biz_norm)
                 st.session_state.df = df
-                st.session_state.manual_address_notice = {
-                    'applied': applied,
-                    'saved': saved,
-                    'errors': save_errors,
-                }
+                st.session_state.manual_address_notice = {'applied': applied, 'saved': saved, 'errors': save_errors}
                 for row in rows:
                     st.session_state.pop(f'manual_addr_input_{row["_source_idx"]}', None)
                 st.rerun()
@@ -324,8 +313,3 @@ def render_address_tools(ctx):
             st.success(f'{notice["applied"]}개 주소를 적용했습니다. 신규 수동주소 {notice["saved"]}개를 공유했습니다.')
             if notice['errors']:
                 st.warning('일부 공유주소 저장에 실패했습니다: ' + ' / '.join(notice['errors'][:3]))
-
-    st.markdown(
-        '''<div class="workflow-strip"><b>작업 순서</b><span>1 자료 입력</span><i>→</i><span>2 API 주소 채우기</span><i>→</i><span>3 사용자 주소 채우기</span><i>→</i><span>4 남은 주소 직접 입력</span><i>→</i><span>5 적용 및 결과 다운로드</span></div>''',
-        unsafe_allow_html=True,
-    )

@@ -7,7 +7,6 @@ from core_logic import categorize_region_code, extract_source_metadata, format_m
 import excel_reports as reports
 from official_template import load_official_halfyear_template
 
-# 사용자가 제공한 확정 양식을 그대로 보존한 내장 템플릿을 사용합니다.
 reports._load_halfyear_template = load_official_halfyear_template
 
 OFFICIAL_GUIDE = "◑에듀파인-계약목록 내려받기 후(①2025년회계2026.1월~2월,② 2026년회계3월~7월)→목록 정리(공공요금, 수수료 등삭제)→ 엑셀.net 활용(파일 올리기)"
@@ -58,7 +57,7 @@ def render_mode1_outputs(ctx):
 
     with col1:
         with st.container(border=True):
-            h1, h2 = st.columns([0.2, 0.8], gap='small')
+            h1, h2 = st.columns([0.18, 0.82], gap='small')
             with h1:
                 st.markdown('<div class="small-file-icon">▤</div>', unsafe_allow_html=True)
             with h2:
@@ -74,7 +73,7 @@ def render_mode1_outputs(ctx):
 
     with col2:
         with st.container(border=True):
-            h1, h2 = st.columns([0.2, 0.8], gap='small')
+            h1, h2 = st.columns([0.18, 0.82], gap='small')
             with h1:
                 st.markdown('<div class="small-file-icon green-file">✓</div>', unsafe_allow_html=True)
             with h2:
@@ -99,12 +98,20 @@ def render_mode1_outputs(ctx):
 
     with col3:
         with st.container(border=True):
-            h1, h2 = st.columns([0.2, 0.8], gap='small')
+            h1, h2 = st.columns([0.18, 0.82], gap='small')
             with h1:
                 st.markdown('<div class="small-file-icon">→</div>', unsafe_allow_html=True)
             with h2:
                 st.markdown(
-                    '<div class="card-title">다음 단계</div><div class="card-desc no-margin">검토용 파일 확인 후 사이드바의 반기보고서 최종작성으로 이동</div>',
+                    '<div class="card-title">최종 보고서 작성</div><div class="card-desc no-margin">검토용 파일을 확인·수정한 뒤 최종작성 메뉴에서 다시 업로드합니다.</div>',
                     unsafe_allow_html=True,
                 )
-            st.markdown('<div class="mini-info"><span class="mini-label">진행 순서</span><b>검토 → 수정 → 재업로드</b><br><span class="mini-label">최종 결과</span><b>확정 4시트 보고서</b></div>', unsafe_allow_html=True)
+            st.markdown(
+                '''<div class="result-step-box"><b>1. 검토용 파일 확인·수정</b>
+                <span>다운로드한 검토용 기초자료에서 주소, 지역, 계약정보 등을 확인합니다.</span></div>
+                <div class="result-step-box"><b>2. 사이드바 → 반기보고서 최종작성</b>
+                <span>수정한 검토용 파일을 다시 업로드합니다.</span></div>
+                <div class="result-step-box"><b>3. 최종 4시트 보고서 다운로드</b>
+                <span>확정된 1-1~1-4 양식의 반기보고서를 생성합니다.</span></div>''',
+                unsafe_allow_html=True,
+            )

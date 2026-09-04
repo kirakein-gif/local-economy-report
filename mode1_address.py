@@ -135,7 +135,6 @@ def render_address_tools(ctx):
             st.markdown(f'<div class="mini-status ok-mini"><b>주소 확인 완료</b><br>{ctx["target_amount"]:,}원 이상 집계대상</div>', unsafe_allow_html=True)
 
     if missing_count:
-        # 모든 본/미러 앱이 같은 GitHub JSON을 읽으므로 다른 사용자의 수동입력도 제안할 수 있습니다.
         shared_store = load_manual_addresses()
         rows = []
         seen = set()
@@ -161,8 +160,8 @@ def render_address_tools(ctx):
         edit_df = pd.DataFrame(rows).set_index('_source_idx')
         with st.expander(f'주소 미확인 업체 확인 · {len(edit_df)}개', expanded=False):
             st.caption(
-                '다른 사용자가 같은 사업자번호에 입력한 주소가 있으면 이전 입력주소에 표시됩니다. '
-                '자동 반영하지 않으며, 확인 후 이전주소 사용을 선택하거나 Bizno 조회 후 직접 입력하세요.'
+                '공동 DB에 같은 사업자번호의 주소가 있으면 이전 입력주소에 표시됩니다. '
+                '사용하려면 해당 행의 「이전주소 사용」을 체크하세요. 새 주소는 Bizno 조회 후 직접 입력할 수 있습니다.'
             )
             edited = st.data_editor(
                 edit_df,
@@ -171,7 +170,11 @@ def render_address_tools(ctx):
                     '업체명': st.column_config.TextColumn('업체명', width='medium'),
                     '사업자번호': st.column_config.TextColumn('사업자번호', width='small'),
                     '이전 입력주소': st.column_config.TextColumn('이전 입력주소', width='large'),
-                    '이전주소 사용': st.column_config.CheckboxColumn('사용', width='small'),
+                    '이전주소 사용': st.column_config.CheckboxColumn(
+                        '이전주소 사용',
+                        help='체크하면 왼쪽의 이전 입력주소를 현재 자료에 적용합니다.',
+                        width='small',
+                    ),
                     'Bizno 조회': st.column_config.LinkColumn('Bizno 조회', display_text='조회하기', width='small'),
                     '주소 수동 입력': st.column_config.TextColumn('주소 입력', width='large'),
                 },
@@ -190,7 +193,6 @@ def render_address_tools(ctx):
                     use_previous = bool(edited.at[idx, '이전주소 사용'])
                     new_addr = str(edited.at[idx, '주소 수동 입력'] or '').strip()
 
-                    # 새로 입력한 주소가 있으면 그것을 우선하고, 없을 때만 사용자가 선택한 이전주소를 씁니다.
                     chosen = new_addr or (previous if use_previous else '')
                     if not chosen:
                         continue
@@ -202,7 +204,6 @@ def render_address_tools(ctx):
                         df.iat[idx, col_addr] = chosen
                     applied += 1
 
-                    # 신규 수동입력만 공유 DB에 기록합니다. 이전주소 재사용은 불필요한 GitHub 쓰기를 하지 않습니다.
                     if new_addr and len(biz) == 10:
                         ok, message = save_manual_address(biz, new_addr, company)
                         if ok:

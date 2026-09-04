@@ -5,7 +5,7 @@ from ui_compact import COMPACT_UI_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
-APP_VERSION = "1.5.4"
+APP_VERSION = "1.6.0"
 DEPLOY_DATE = "2026.09.04"
 
 st.set_page_config(

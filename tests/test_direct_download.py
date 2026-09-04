@@ -7,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 
 class DirectDownloadTests(unittest.TestCase):
-    def test_advisory_warning_preview_and_invalid_period(self):
+    def test_advisory_warning_restore_and_invalid_period(self):
         workbook = Workbook()
         workbook.remove(workbook.active)
         for name in ('공사', '용역', '물품', '검토반영'):
@@ -28,11 +28,14 @@ class DirectDownloadTests(unittest.TestCase):
             self.assertEqual(len(at.checkbox), 0)
             self.assertFalse(at.get('download_button')[0].proto.disabled)
             self.assertFalse(any(button.label == '반기보고서 생성하기' for button in at.button))
-            for name in ('공사', '용역', '물품', '검토반영'):
-                at.radio(key='final_preview_sheet').set_value(name).run()
-                self.assertEqual(at.dataframe[0].value.iloc[1, 0], name)
-            at.number_input(key='final_report_year').set_value(2027).run()
-            self.assertIn('2027년', at.dataframe[0].value.iloc[0, 0])
+            self.assertFalse(any(radio.key == 'final_preview_sheet' for radio in at.radio))
+            self.assertTrue(at.button(key='final_restore').disabled)
+            original_year = at.number_input(key='final_report_year').value
+            at.number_input(key='final_report_year').set_value(original_year + 1).run()
+            self.assertFalse(at.button(key='final_restore').disabled)
+            at.button(key='final_restore').click().run()
+            self.assertEqual(at.number_input(key='final_report_year').value, original_year)
+            self.assertTrue(at.button(key='final_restore').disabled)
             at.date_input(key='final_period_start').set_value(date(2099, 1, 1)).run()
             self.assertTrue(at.get('download_button')[0].proto.disabled)
             at.button(key='final_restore').click().run()

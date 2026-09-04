@@ -1,9 +1,6 @@
 from datetime import date
 from hashlib import sha256
 from html import escape
-from io import BytesIO
-from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 
 import pandas as pd
 import streamlit as st
@@ -31,25 +28,6 @@ def _label_report(content, year, half, start, end):
     return apply_report_info(content, year, half, start, end)
 
 
-@st.cache_data(show_spinner=False, max_entries=8)
-def _sheet_preview(content, sheet_index):
-    workbook = load_workbook(BytesIO(content), read_only=True, data_only=False)
-    try:
-        sheet = workbook.worksheets[sheet_index]
-        rows = list(sheet.iter_rows(values_only=True))
-        while rows and all(value is None for value in rows[-1]):
-            rows.pop()
-        width = max((i + 1 for row in rows for i, value in enumerate(row) if value is not None), default=0)
-        # Strings preserve mixed Excel cell types without Arrow conversion failures.
-        frame = pd.DataFrame([[str(value) if value is not None else '' for value in row[:width]] for row in rows],
-                             columns=[get_column_letter(i + 1) for i in range(width)],
-                             index=range(1, len(rows) + 1))
-        frame.index.name = '행'
-        return sheet.title, frame
-    finally:
-        workbook.close()
-
-
 def render_mode2():
     st.markdown(MODE2_CSS, unsafe_allow_html=True)
     left, right = st.columns([1.15, 1], gap='small')
@@ -71,7 +49,6 @@ def render_mode2():
                 st.session_state.final_source_info = info
                 st.session_state.final_source_fingerprint = fingerprint
                 _restore(info)
-                st.session_state.final_show_review = False
             except Exception as exc:
                 error = str(exc)
         if not error:
@@ -108,7 +85,12 @@ def render_mode2():
                     st.write(f'제목: {year}년 {half} 지역경제활성화 추진 실적')
                     st.write(f'보고기간: {start:%Y.%m.%d} ~ {end:%Y.%m.%d}')
                     st.caption('기간은 보고서 표기입니다. 업로드한 계약을 제외하거나 금액을 재분류하지 않습니다.')
-                    st.button('자동 인식값으로 되돌리기', key='final_restore', on_click=_restore, args=(info,))
+                    changed = (year, half, start, end) != (info['year'], info['half'], info['start'], info['end'])
+                    st.caption(f'처음 인식한 값: {info["year"]}년 {info["half"]} · {info["start"]:%Y.%m.%d} ~ {info["end"]:%Y.%m.%d}')
+                    st.button('수정한 보고 정보를 처음 인식한 값으로 복원', key='final_restore',
+                              on_click=_restore, args=(info,), disabled=not changed)
+                    if not changed:
+                        st.caption('현재 보고 정보가 처음 인식한 값과 같습니다.')
                 else:
                     st.caption('계약일 건수로 연도·반기를 추천하고, 파일의 집계기간을 우선 인식합니다.')
     if result:
@@ -132,9 +114,7 @@ def render_mode2():
         c1, c2, c3 = st.columns(3, gap='small')
         with c1:
             with st.container(border=True, key='final_check_step'):
-                _heading(1, '기초자료 확인 (선택)', '기초자료 구조와 사용자 수정값,<br>기관정보를 확인합니다.')
-                if st.button('기초자료 펼치기 / 접기', key='final_check', width='stretch', disabled=not result):
-                    st.session_state.final_show_review = not st.session_state.get('final_show_review', False)
+                _heading(1, '기초자료 확인 완료' if result else '기초자료 확인', '업로드 시 필수 열과 분류값을 자동 확인합니다.<br>별도로 누를 버튼은 없습니다.')
                 st.markdown(f'<div class="final-count blue"><b>검토 기초자료 {len(records):,}건</b><small>필수 열과 분류값 확인</small></div>', unsafe_allow_html=True)
         with c2:
             with st.container(border=True, key='final_generate_step'):
@@ -148,23 +128,13 @@ def render_mode2():
                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                    key='final_halfyear_download', width='stretch', disabled=not valid)
                 st.markdown(f'<div class="final-count orange"><b>다운로드 가능 {1 if valid else 0}개 파일</b><small>수정한 보고 정보 · 파일명 반영</small></div>', unsafe_allow_html=True)
-        st.markdown('<div class="final-workflow"><b>ⓘ 작업 순서 안내</b><span>❶ 파일 업로드 → ❷ 보고 정보 확인·수정 → ❸ 바로 다운로드</span><details><summary>사용방법 보기</summary>검토용 기초자료 1개를 업로드하고 자동 인식된 보고 정보를 확인하세요. 수정한 제목·기간·파일명은 즉시 보고서에 반영됩니다. 별도 확인 체크나 생성 버튼 없이 다운로드할 수 있습니다. 아래 시트를 선택하면 실제 다운로드할 내용을 미리 볼 수 있습니다.</details></div>', unsafe_allow_html=True)
+        st.markdown('<div class="final-workflow"><b>ⓘ 작업 순서 안내</b><span>❶ 파일 업로드 → ❷ 보고 정보 확인·수정 → ❸ 바로 다운로드</span><details><summary>사용방법 보기</summary>검토용 기초자료 1개를 업로드하고 자동 인식된 보고 정보를 확인하세요. 수정한 제목·기간·파일명은 즉시 보고서에 반영됩니다. 별도 확인 체크나 생성 버튼 없이 다운로드할 수 있습니다.</details></div>', unsafe_allow_html=True)
     if notes:
         st.warning(' · '.join(notes))
-    with st.container(border=True, key='final_sheet_preview'):
-        st.markdown('### 시트 내용 미리보기')
-        if valid:
-            selected = st.radio('확인할 시트', ['공사', '용역', '물품', '검토반영'],
-                                horizontal=True, key='final_preview_sheet')
-            sheet_name, frame = _sheet_preview(final_bytes, ['공사', '용역', '물품', '검토반영'].index(selected))
-            st.caption(f'{sheet_name} · 다운로드 파일의 실제 셀 내용입니다. 서식과 병합은 Excel 파일에서 확인하세요.')
-            st.dataframe(frame, width='stretch', height=380)
-        else:
-            st.info('검토파일을 업로드하고 올바른 보고기간을 설정하면 시트 내용을 확인할 수 있습니다.')
     if result:
         base, edu, book = result[3]
         totals = {kind: sum(base[kind, loc][0] for loc in (1, 2, 3)) for kind in ('공사', '용역', '물품')}
         st.markdown(f'<div class="final-result-summary"><b>검토 반영 결과</b><span>기초자료 {len(records):,}건</span><span>공사 {totals["공사"]:,} · 용역 {totals["용역"]:,} · 물품 {totals["물품"]:,}</span><span>교육용 {sum(edu[loc][0] for loc in (1, 2, 3)):,} · 도서 {sum(book[loc][0] for loc in (1, 2, 3)):,}</span></div>', unsafe_allow_html=True)
-        if st.session_state.get('final_show_review'):
-            st.dataframe(pd.DataFrame(records), hide_index=True, width='stretch')
-            st.caption('검토파일의 사용자 수정값을 반영한 결과입니다. 원본 변경은 검토용 Excel에서 진행하세요.')
+        with st.expander(f'반영된 계약 목록 보기 (선택) · {len(records):,}건'):
+            st.caption('업로드한 기초자료에 사용자 수정값을 반영한 계약 목록입니다. 다운로드를 위한 필수 단계가 아니며, 수정은 원본 Excel에서 진행하세요.')
+            st.dataframe(pd.DataFrame(records), hide_index=True, width='stretch', height=300)

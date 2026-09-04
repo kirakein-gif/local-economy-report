@@ -4,8 +4,8 @@ from ui_style import APP_CSS
 from app_mode1 import render_mode1
 from app_mode2 import render_mode2
 
-APP_VERSION = "1.5.1"
-DEPLOY_DATE = "2026.09.03"
+APP_VERSION = "1.5.2"
+DEPLOY_DATE = "2026.09.04"
 
 st.set_page_config(
     page_title="지역경제활성화 자동 집계 시스템",
@@ -52,13 +52,22 @@ with st.sidebar:
     st.divider()
 
 active_count, waiting_count, _ = waiting_status()
-mode_caption = "자료관리목록 정제 · 주소 보완 · 분기보고서 · 반기 검토파일" if mode.startswith("자료") else "검토 완료 기초자료 재업로드 · 최종 4시트 보고서"
-st.markdown(
-    f'''<div class="app-head"><div class="app-brand"><div class="app-logo">▦</div><div><div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><div class="app-title">지역경제활성화 자동 집계</div><span style="font-size:.67rem;font-weight:600;color:#a1a1aa;white-space:nowrap">v{APP_VERSION} · {DEPLOY_DATE}</span></div><div class="app-sub">{mode_caption}</div></div></div><div class="live-chip">●&nbsp; 사용 {active_count}/{MAX_CONCURRENT} &nbsp;·&nbsp; 대기 {waiting_count}</div></div>''',
-    unsafe_allow_html=True,
-)
 
 if mode.startswith("자료"):
+    st.markdown(
+        f'''<div class="standard-hero">
+            <div class="hero-left"><div class="hero-building">▦</div><div>
+                <div class="hero-title">지역경제 활성화 계약자료 주소 정리</div>
+                <div class="hero-sub">계약자료의 주소를 자동으로 조회하고, 쉽고 빠르게 보완할 수 있습니다.</div>
+            </div></div>
+            <div class="hero-info"><span>i</span><div>엑셀 파일을 업로드하고, 아래 순서에 따라 진행해 주세요.<small>v{APP_VERSION} · {DEPLOY_DATE} · 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</small></div></div>
+        </div>''',
+        unsafe_allow_html=True,
+    )
     render_mode1()
 else:
+    st.markdown(
+        f'''<div class="app-head"><div class="app-brand"><div class="app-logo">▦</div><div><div class="app-title">지역경제활성화 자동 집계</div><div class="app-sub">검토 완료 기초자료 재업로드 · 최종 4시트 보고서</div></div></div><div class="live-chip">● 사용 {active_count}/{MAX_CONCURRENT} · 대기 {waiting_count}</div></div>''',
+        unsafe_allow_html=True,
+    )
     render_mode2()

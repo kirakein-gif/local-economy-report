@@ -14,13 +14,12 @@ from core_logic import (
     normalize_contract_type,
 )
 
-
 QUICK_AMOUNTS = [0, 100000, 500000, 1000000]
 AMOUNT_SLIDER_MAX = 10000000
 
 
 def _detect_region_from_addresses(df, col_addr):
-    """이미 들어 있는 주소 중 가장 많이 등장하는 충남 시·군을 1차 기준 지역으로 잡습니다."""
+    """기존 주소에서 가장 많이 등장하는 충남 시·군을 1차 기준 지역으로 잡습니다."""
     if col_addr is None or col_addr >= df.shape[1]:
         return CHUNGNAM_REGIONS[0], 0
 
@@ -66,14 +65,17 @@ def prepare_mode1():
     if 'region_mode' not in st.session_state:
         st.session_state.region_mode = '자동 선택'
 
-    st.markdown('<div class="section-title compact-title">▣ 자료 입력</div>', unsafe_allow_html=True)
-    with st.container(border=True, key='data_input_panel'):
-        left, right = st.columns([2.25, 1.05], gap='large')
+    # 상단은 표준 UI 이미지처럼 자료 입력 / 검색 조건 2개 카드로 구성합니다.
+    left, right = st.columns([1.62, 1], gap='medium')
 
-        with left:
+    with left:
+        with st.container(border=True, key='upload_card'):
             st.markdown(
-                '''<div class="upload-panel-title">자료 입력</div>
-                <div class="upload-panel-desc">계약자료 Excel 파일을 업로드하세요. 여러 파일을 한 번에 선택할 수 있습니다.</div>''',
+                '''<div class="panel-head">
+                    <div class="panel-icon blue-icon">▤</div>
+                    <div><div class="panel-title">자료 입력</div>
+                    <div class="panel-desc">계약자료 Excel 파일을 업로드하세요. <b>(여러 파일 가능)</b></div></div>
+                </div>''',
                 unsafe_allow_html=True,
             )
             data_files = st.file_uploader(
@@ -84,63 +86,83 @@ def prepare_mode1():
                 label_visibility='collapsed',
             )
             st.markdown(
-                '''<div class="upload-hint">↥ <b>파일을 클릭하여 선택하거나 이 영역으로 드래그해서 놓으세요.</b><br>
-                <span>여러 파일은 자동으로 합산됩니다.</span></div>''',
+                '''<div class="drop-guide">
+                    <div class="drop-cloud">☁</div>
+                    <b>여기에 파일을 드래그하거나 클릭하여 업로드하세요</b>
+                    <span>Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다.</span>
+                </div>''',
                 unsafe_allow_html=True,
             )
             st.markdown(
-                '''<div class="source-path-guide"><b>파일 내려받기 경로</b><br>
-                학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리</div>''',
+                '''<div class="source-path-guide"><span class="path-info">●</span>
+                <b>파일 다운로드 경로 :</b>&nbsp; 학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리<br>
+                <small>해당 메뉴에서 Excel 파일을 내려받아 업로드하세요.</small></div>''',
                 unsafe_allow_html=True,
             )
-
-        if data_files:
-            fingerprint = file_fingerprint(data_files)
-            if st.session_state.get('uploaded_fingerprint') != fingerprint:
-                loaded = [load_excel_normalized(f.getvalue(), 21) for f in data_files]
-                frames = [x[0] for x in loaded]
-                headers = list(loaded[0][1])
-                max_cols = max(frame.shape[1] for frame in frames)
-                frames = [frame.reindex(columns=range(max_cols)) for frame in frames]
-                if len(headers) < max_cols:
-                    headers += [f'열{i+1}' for i in range(len(headers), max_cols)]
-                st.session_state.df = pd.concat(frames, ignore_index=True)
-                st.session_state.original_headers = tuple(headers)
-                st.session_state.uploaded_fingerprint = fingerprint
-
-            df = st.session_state.df
-            headers = st.session_state.original_headers
-
-            def pre_col(key):
-                found = find_source_col(headers, key)
-                return FALLBACK_COLS.get(key) if found is None else found
-
-            auto_region, auto_region_count = _detect_region_from_addresses(df, pre_col('address'))
-        else:
-            auto_region, auto_region_count = CHUNGNAM_REGIONS[0], 0
-
-        with right:
             st.markdown(
-                '''<div class="filter-panel-title">⌕&nbsp; 검색 조건 <span>(선택)</span></div>''',
+                '''<div class="upload-checks">
+                <span>● 여러 파일을 한 번에 업로드하면 자동으로 합산됩니다.</span>
+                <span>● 파일을 드래그해서 놓아도 업로드할 수 있습니다.</span>
+                <span>● 업로드한 파일은 현재 작업 중에만 임시 사용됩니다.</span>
+                </div>''',
                 unsafe_allow_html=True,
             )
+
+    if data_files:
+        fingerprint = file_fingerprint(data_files)
+        if st.session_state.get('uploaded_fingerprint') != fingerprint:
+            loaded = [load_excel_normalized(f.getvalue(), 21) for f in data_files]
+            frames = [x[0] for x in loaded]
+            headers = list(loaded[0][1])
+            max_cols = max(frame.shape[1] for frame in frames)
+            frames = [frame.reindex(columns=range(max_cols)) for frame in frames]
+            if len(headers) < max_cols:
+                headers += [f'열{i+1}' for i in range(len(headers), max_cols)]
+            st.session_state.df = pd.concat(frames, ignore_index=True)
+            st.session_state.original_headers = tuple(headers)
+            st.session_state.uploaded_fingerprint = fingerprint
+
+        df = st.session_state.df
+        headers = st.session_state.original_headers
+
+        def pre_col(key):
+            found = find_source_col(headers, key)
+            return FALLBACK_COLS.get(key) if found is None else found
+
+        auto_region, auto_region_count = _detect_region_from_addresses(df, pre_col('address'))
+    else:
+        auto_region, auto_region_count = CHUNGNAM_REGIONS[0], 0
+
+    with right:
+        with st.container(border=True, key='filter_card'):
+            st.markdown(
+                '''<div class="filter-title-row"><div class="filter-icon">⌕</div>
+                <div class="filter-title">검색 조건 <span>(선택)</span></div>
+                <div class="filter-note">비워두면 전체 데이터를 대상으로 처리합니다.</div></div>''',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown('<div class="field-title">기준 지역 <span class="field-info">i</span></div>', unsafe_allow_html=True)
             region_mode = st.radio(
                 '기준 지역',
                 ['자동 선택', '직접 선택'],
                 horizontal=True,
                 key='region_mode',
                 help='자동 선택은 업로드 자료의 기존 주소에서 가장 많이 나타나는 지역을 기준으로 잡습니다.',
+                label_visibility='collapsed',
             )
             if region_mode == '자동 선택':
                 target_region = auto_region
                 if data_files and auto_region_count:
                     st.markdown(
-                        f'''<div class="auto-region-box"><span>현재 기준 지역</span><b>{target_region}</b><small>기존 주소에서 가장 많이 확인된 지역 · {auto_region_count:,}건</small></div>''',
+                        f'''<div class="auto-region-box"><span>현재 기준 지역</span><b>{target_region}</b>
+                        <small>(예시: 주소가 가장 많은 지역) · 기존 주소 {auto_region_count:,}건 확인</small></div>''',
                         unsafe_allow_html=True,
                     )
                 else:
                     st.markdown(
-                        f'''<div class="auto-region-box"><span>현재 기준 지역</span><b>{target_region}</b><small>파일 업로드 후 기존 주소를 기준으로 자동 선택됩니다.</small></div>''',
+                        '''<div class="auto-region-box"><span>현재 기준 지역</span><b>파일 업로드 후 자동 선택</b>
+                        <small>기존 주소에서 가장 많이 확인되는 지역을 기준으로 잡습니다.</small></div>''',
                         unsafe_allow_html=True,
                     )
             else:
@@ -154,22 +176,9 @@ def prepare_mode1():
                 )
 
             st.markdown('<div class="filter-divider"></div>', unsafe_allow_html=True)
-            amount_label_col, amount_input_col = st.columns([1.05, 1], gap='small', vertical_alignment='center')
-            with amount_label_col:
-                st.markdown('<div class="amount-label inline-amount-label">집계 기준 금액 <span>(원 이상)</span></div>', unsafe_allow_html=True)
-            with amount_input_col:
-                st.number_input(
-                    '직접 입력',
-                    min_value=0,
-                    step=10000,
-                    key='amount_number',
-                    on_change=_sync_amount_from_number,
-                    format='%d',
-                    label_visibility='collapsed',
-                    help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.',
-                )
+            st.markdown('<div class="field-title">집계 기준 금액 <span>(원 이상)</span> <span class="field-info">i</span></div>', unsafe_allow_html=True)
 
-            q1, q2, q3, q4 = st.columns(4, gap='small')
+            q1, q2, q3, q4, q5 = st.columns([0.75, 0.85, 0.85, 0.9, 1.42], gap='small')
             quick_specs = [
                 (q1, '0원', 0),
                 (q2, '10만원', 100000),
@@ -185,6 +194,18 @@ def prepare_mode1():
                     width='stretch',
                     type='primary' if int(st.session_state.amount_number) == value else 'secondary',
                 )
+            with q5:
+                st.markdown('<div class="direct-input-label">직접 입력</div>', unsafe_allow_html=True)
+                st.number_input(
+                    '직접 입력',
+                    min_value=0,
+                    step=10000,
+                    key='amount_number',
+                    on_change=_sync_amount_from_number,
+                    format='%d',
+                    label_visibility='collapsed',
+                    help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.',
+                )
 
             st.slider(
                 '금액 슬라이더',
@@ -196,20 +217,13 @@ def prepare_mode1():
                 label_visibility='collapsed',
             )
             target_amount = int(st.session_state.amount_number or 0)
-            st.caption(f'현재 집계 기준 · {target_amount:,}원 이상')
+            st.markdown(
+                f'<div class="slider-caption"><span>0원</span><b>{target_amount:,}원 이상</b><span>{AMOUNT_SLIDER_MAX:,}원+</span></div>',
+                unsafe_allow_html=True,
+            )
 
     if not data_files:
-        st.markdown(
-            '''<div class="empty-card compact-empty"><div class="empty-icon">▤</div>
-            <div class="work-title">자료관리목록을 업로드해 주세요</div>
-            <div class="work-desc">파일은 클릭하여 선택하거나 업로드 영역으로 드래그해서 놓을 수 있습니다.<br>
-            <span style="color:#475467;font-weight:650">학교(재무)회계 → 계약관리 → 계약자료관리 → 자료관리</span>에서 내려받으시면 됩니다.</div></div>''',
-            unsafe_allow_html=True,
-        )
         st.stop()
-
-    if data_files:
-        st.caption(f'선택된 파일 {len(data_files)}개 · 여러 파일은 자동 합산됩니다.')
 
     df = st.session_state.df
     headers = st.session_state.original_headers

@@ -94,7 +94,6 @@ def prepare_mode1():
                 unsafe_allow_html=True,
             )
 
-        # 업로드 파일을 먼저 읽어 자동 기준 지역을 계산합니다.
         if data_files:
             fingerprint = file_fingerprint(data_files)
             if st.session_state.get('uploaded_fingerprint') != fingerprint:
@@ -155,7 +154,20 @@ def prepare_mode1():
                 )
 
             st.markdown('<div class="filter-divider"></div>', unsafe_allow_html=True)
-            st.markdown('<div class="amount-label">집계 기준 금액 <span>(원 이상)</span></div>', unsafe_allow_html=True)
+            amount_label_col, amount_input_col = st.columns([1.05, 1], gap='small', vertical_alignment='center')
+            with amount_label_col:
+                st.markdown('<div class="amount-label inline-amount-label">집계 기준 금액 <span>(원 이상)</span></div>', unsafe_allow_html=True)
+            with amount_input_col:
+                st.number_input(
+                    '직접 입력',
+                    min_value=0,
+                    step=10000,
+                    key='amount_number',
+                    on_change=_sync_amount_from_number,
+                    format='%d',
+                    label_visibility='collapsed',
+                    help='원하는 집계 기준 금액을 직접 입력할 수 있습니다.',
+                )
 
             q1, q2, q3, q4 = st.columns(4, gap='small')
             quick_specs = [
@@ -182,15 +194,6 @@ def prepare_mode1():
                 key='amount_slider',
                 on_change=_sync_amount_from_slider,
                 label_visibility='collapsed',
-            )
-            st.number_input(
-                '직접 입력',
-                min_value=0,
-                step=10000,
-                key='amount_number',
-                on_change=_sync_amount_from_number,
-                format='%d',
-                help='버튼이나 슬라이더 외에 원하는 금액을 직접 입력할 수 있습니다.',
             )
             target_amount = int(st.session_state.amount_number or 0)
             st.caption(f'현재 집계 기준 · {target_amount:,}원 이상')

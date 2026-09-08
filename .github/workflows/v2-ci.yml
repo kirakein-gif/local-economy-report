@@ -39,6 +39,11 @@ jobs:
           ADDRESS_CACHE_BACKEND: memory
         run: PYTHONPATH=v2/backend python -c "from app.main import app; print(app.title)"
 
+      - name: Run backend unit tests
+        env:
+          ADDRESS_CACHE_BACKEND: memory
+        run: PYTHONPATH=v2/backend python -m unittest discover -s v2/backend/tests -v
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:

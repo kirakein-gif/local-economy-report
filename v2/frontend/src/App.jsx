@@ -17,13 +17,17 @@ export default function App() {
   const [manualRegion, setManualRegion] = useState("천안");
   const [targetAmount, setTargetAmount] = useState(500000);
   const [result, setResult] = useState(null);
+  const [config, setConfig] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [addressResult, setAddressResult] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     fetch("/api/config")
       .then((response) => response.json())
       .then((data) => {
+        setConfig(data);
         if (Array.isArray(data.regions)) {
           setRegions(data.regions);
           setManualRegion(data.regions[0] || "천안");
@@ -49,6 +53,7 @@ export default function App() {
     setBusy(true);
     setError("");
     setResult(null);
+    setAddressResult(null);
 
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
@@ -72,6 +77,40 @@ export default function App() {
       setBusy(false);
     }
   }
+
+  async function lookupAddresses() {
+    const candidates = result?.lookup_candidates || [];
+    if (!candidates.length) {
+      setError("API로 조회할 주소 미확인 업체가 없습니다.");
+      return;
+    }
+
+    setAddressBusy(true);
+    setAddressResult(null);
+    setError("");
+
+    try {
+      const response = await fetch("/api/address/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          biz_numbers: candidates.map((item) => item.biz_no),
+          force_refresh: false,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "주소 조회에 실패했습니다.");
+      }
+      setAddressResult(data);
+    } catch (err) {
+      setError(err.message || "주소 조회 중 오류가 발생했습니다.");
+    } finally {
+      setAddressBusy(false);
+    }
+  }
+
+  const cacheName = config?.address_cache?.active === "firestore" ? "Firestore 공유 캐시" : "메모리 캐시";
 
   return (
     <div className="app-shell">
@@ -103,6 +142,7 @@ export default function App() {
         <div className="sidebar-spacer" />
         <div className="side-note">
           <b>v2 Cloud Run 전환판</b>
+          <span>{cacheName}</span>
           <span>기존 Streamlit 운영판과 분리 개발 중</span>
         </div>
       </aside>
@@ -215,8 +255,8 @@ export default function App() {
 
             <section className="action-row">
               <div>
-                <strong>첫 번째 기능 연결 완료</strong>
-                <span>업로드 파일을 서버에서 실제 분석하여 대상 건수와 주소 누락률을 계산합니다.</span>
+                <strong>계약자료 1차 분석</strong>
+                <span>보고 대상, 주소 누락, API 조회 가능 업체를 먼저 확인합니다.</span>
               </div>
               <button className="primary" disabled={busy} onClick={inspectFiles}>
                 {busy ? "분석 중..." : "파일 분석 시작"}
@@ -234,6 +274,7 @@ export default function App() {
                   </div>
                   <span className="pill">{result.target_region} 기준</span>
                 </div>
+
                 <div className="metric-grid">
                   <div className="metric">
                     <span>전체 데이터</span>
@@ -256,11 +297,64 @@ export default function App() {
                     <small>%</small>
                   </div>
                 </div>
+
                 <div className="result-foot">
                   자동 감지 지역: <b>{result.auto_region}</b> · API 조회 후보:
-                  <b> {formatNumber(result.api_lookup_candidate_count)}건</b> · 기준 금액:
+                  <b> {formatNumber(result.api_lookup_candidate_count)}개 업체</b> · 기준 금액:
                   <b> {formatNumber(result.target_amount)}원</b>
                 </div>
+
+                <div className="address-action">
+                  <div>
+                    <span className="step">STEP 03</span>
+                    <h3>공공 API 주소 조회</h3>
+                    <p>나라장터 → 학교장터(S2B) → 공정위 → 지역화폐 순으로 조회합니다.</p>
+                  </div>
+                  <button
+                    className="primary"
+                    disabled={addressBusy || !result.api_lookup_candidate_count}
+                    onClick={lookupAddresses}
+                  >
+                    {addressBusy
+                      ? "주소 조회 중..."
+                      : "주소 조회 시작 · " + formatNumber(result.api_lookup_candidate_count) + "개 업체"}
+                  </button>
+                </div>
+
+                {addressResult && (
+                  <div className="address-result">
+                    <div className="address-summary">
+                      <div>
+                        <span>주소 확인</span>
+                        <strong>{formatNumber(addressResult.found_count)}개</strong>
+                      </div>
+                      <div>
+                        <span>미확인</span>
+                        <strong>{formatNumber(addressResult.not_found_count)}개</strong>
+                      </div>
+                      <div>
+                        <span>캐시 재사용</span>
+                        <strong>{formatNumber(addressResult.cache_hit_count)}개</strong>
+                      </div>
+                      <div>
+                        <span>캐시 방식</span>
+                        <strong>{addressResult.cache?.active === "firestore" ? "공유" : "로컬"}</strong>
+                      </div>
+                    </div>
+                    <div className="source-line">
+                      나라장터 <b>{formatNumber(addressResult.source_counts?.["나라장터"])}</b>
+                      <span>·</span>
+                      학교장터 <b>{formatNumber(addressResult.source_counts?.["학교장터(S2B)"])}</b>
+                      <span>·</span>
+                      공정위 <b>{formatNumber(addressResult.source_counts?.["공정위 통신판매사업자"])}</b>
+                      <span>·</span>
+                      지역화폐 <b>{formatNumber(addressResult.source_counts?.["지역화폐 가맹점"])}</b>
+                    </div>
+                    <p className="next-note">
+                      다음 단계에서 확인된 주소를 원본 데이터에 반영하고 검토용 Excel 다운로드까지 연결합니다.
+                    </p>
+                  </div>
+                )}
               </section>
             )}
           </>

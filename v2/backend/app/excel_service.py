@@ -94,6 +94,30 @@ def _detect_region(df, address_col):
     return max(counts.items(), key=lambda item: item[1])
 
 
+def _lookup_candidates(df, missing_mask, valid_biz, biz_norm, company_col):
+    candidates = []
+    seen = set()
+
+    for idx in df.index[missing_mask & valid_biz]:
+        biz = str(biz_norm.at[idx] or "").strip()
+        if not biz or biz in seen:
+            continue
+        seen.add(biz)
+
+        company = ""
+        if company_col is not None and company_col < df.shape[1]:
+            value = df.iat[idx, company_col]
+            if pd.notna(value):
+                company = str(value).strip()
+
+        candidates.append({
+            "biz_no": biz,
+            "company": company,
+        })
+
+    return candidates
+
+
 def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual_region=""):
     loaded = [_load_one(payload) for payload in file_payloads]
     frames = [item[0] for item in loaded]
@@ -110,6 +134,7 @@ def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual
     type_col = find_source_col(headers, "type")
     biz_col = find_source_col(headers, "biz")
     address_col = find_source_col(headers, "address")
+    company_col = find_source_col(headers, "company")
 
     missing_columns = [
         name
@@ -139,6 +164,7 @@ def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual
     report_count = int(report_mask.sum())
     missing_count = int(missing.sum())
     completion = 0 if report_count == 0 else round((report_count - missing_count) / report_count * 100, 1)
+    candidates = _lookup_candidates(df, missing, valid_biz, biz_norm, company_col)
 
     return {
         "file_count": len(file_payloads),
@@ -149,6 +175,8 @@ def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual
         "target_region": target_region,
         "report_count": report_count,
         "missing_address_count": missing_count,
-        "api_lookup_candidate_count": int((missing & valid_biz).sum()),
+        "api_lookup_candidate_count": len(candidates),
+        "api_lookup_candidate_row_count": int((missing & valid_biz).sum()),
         "address_completion_percent": completion,
+        "lookup_candidates": candidates,
     }

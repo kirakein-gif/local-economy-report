@@ -3,13 +3,32 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
+from .address_service import (
+    MAX_BULK_BUSINESSES,
+    bulk_lookup_addresses,
+    get_api_key,
+    lookup_address,
+)
+from .cache import address_cache
 from .excel_service import CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, inspect_workbooks
 
-APP_VERSION = "2.0.0-alpha.1"
+APP_VERSION = "2.0.0-alpha.2"
 MAX_FILES = 20
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TOTAL_BYTES = 120 * 1024 * 1024
+
+
+class AddressLookupRequest(BaseModel):
+    biz_no: str
+    force_refresh: bool = False
+
+
+class AddressBulkLookupRequest(BaseModel):
+    biz_numbers: list[str] = Field(default_factory=list)
+    force_refresh: bool = False
+
 
 app = FastAPI(
     title="지역경제활성화 자동 집계 시스템 API",
@@ -31,6 +50,8 @@ def health():
         "status": "ok",
         "service": "local-economy-report-v2",
         "version": APP_VERSION,
+        "address_cache": address_cache.status(),
+        "public_data_api_configured": bool(get_api_key()),
     }
 
 
@@ -40,7 +61,32 @@ def config():
         "regions": CHUNGNAM_REGIONS,
         "default_target_amount": DEFAULT_TARGET_AMOUNT,
         "version": APP_VERSION,
+        "max_bulk_businesses": MAX_BULK_BUSINESSES,
+        "address_cache": address_cache.status(),
+        "public_data_api_configured": bool(get_api_key()),
     }
+
+
+@app.post("/api/address/lookup")
+def address_lookup(payload: AddressLookupRequest):
+    result = lookup_address(payload.biz_no, force_refresh=payload.force_refresh)
+    if result.get("invalid"):
+        raise HTTPException(status_code=422, detail="10자리 사업자등록번호가 필요합니다.")
+    return result
+
+
+@app.post("/api/address/bulk")
+def address_bulk_lookup(payload: AddressBulkLookupRequest):
+    if not payload.biz_numbers:
+        raise HTTPException(status_code=400, detail="조회할 사업자등록번호가 없습니다.")
+
+    try:
+        return bulk_lookup_addresses(
+            payload.biz_numbers,
+            force_refresh=payload.force_refresh,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/prepare/inspect")

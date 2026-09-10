@@ -6,12 +6,14 @@ on:
       - cloudrun-v2
     paths:
       - "v2/**"
+      - "template_parts/**"
       - "Dockerfile"
       - ".dockerignore"
       - ".github/workflows/v2-ci.yml"
   pull_request:
     paths:
       - "v2/**"
+      - "template_parts/**"
       - "Dockerfile"
       - ".dockerignore"
       - ".github/workflows/v2-ci.yml"
@@ -56,3 +58,6 @@ jobs:
       - name: Build frontend
         working-directory: v2/frontend
         run: npm run build
+
+      - name: Build production Docker image
+        run: docker build -t local-economy-report-v2:ci .

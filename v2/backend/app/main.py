@@ -20,9 +20,9 @@ from .cache import address_cache
 from .excel_service import CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, inspect_workbooks
 from .manual_store import backend_name as manual_backend_name
 from .manual_store import save_manual_address
-from .report_service import build_review_workbook
+from .report_service import build_final_halfyear_report, build_review_workbook
 
-APP_VERSION = "2.0.0-alpha.3"
+APP_VERSION = "2.0.0-alpha.4"
 MAX_FILES = 20
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TOTAL_BYTES = 120 * 1024 * 1024
@@ -60,6 +60,10 @@ app.add_middleware(
         "X-Record-Count",
         "X-Filled-Address-Count",
         "X-Unresolved-Address-Count",
+        "X-Region",
+        "X-Institution",
+        "X-Corrected-Location-Count",
+        "X-Purpose-Correction-Count",
     ],
 )
 
@@ -243,7 +247,7 @@ async def prepare_review(
             start_date=report_start,
             end_date=report_end,
         )
-    except (ValueError, FileNotFoundError) as exc:
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
@@ -261,6 +265,41 @@ async def prepare_review(
             "X-Record-Count": str(result["record_count"]),
             "X-Filled-Address-Count": str(result["filled_address_count"]),
             "X-Unresolved-Address-Count": str(result["unresolved_address_count"]),
+        },
+    )
+
+
+@app.post("/api/final/report")
+async def final_report(file: UploadFile = File(...)):
+    payloads = await _read_upload_payloads([file])
+    try:
+        result = build_final_halfyear_report(payloads[0])
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"최종 반기보고서 생성 중 오류가 발생했습니다: {exc}",
+        ) from exc
+
+    region = result.get("region", "") or "지역"
+    institution = result.get("institution", "") or "기관"
+    year = result.get("year", "") or "반기"
+    label = result.get("label", "반기")
+    filename = f"{year}_{label}_{region}_{institution}_지역경제활성화_최종보고서.xlsx"
+    encoded_filename = quote(filename)
+    purpose_corrections = int(result.get("blank_purpose", 0)) + int(result.get("invalid_purpose", 0))
+
+    return StreamingResponse(
+        BytesIO(result["bytes"]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "X-Record-Count": str(result["record_count"]),
+            "X-Region": quote(region),
+            "X-Institution": quote(institution),
+            "X-Corrected-Location-Count": str(result.get("corrected_location", 0)),
+            "X-Purpose-Correction-Count": str(purpose_corrections),
         },
     )
 

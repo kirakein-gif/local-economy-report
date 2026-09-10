@@ -5,7 +5,12 @@ from io import BytesIO
 import pandas as pd
 from openpyxl import load_workbook
 
-from app.report_service import REVIEW_SHEET, build_review_workbook
+from app.report_service import (
+    REQUIRED_SHEETS,
+    REVIEW_SHEET,
+    build_final_halfyear_report,
+    build_review_workbook,
+)
 
 
 class ReportServiceTests(unittest.TestCase):
@@ -38,8 +43,8 @@ class ReportServiceTests(unittest.TestCase):
         pd.DataFrame([row], columns=headers).to_excel(output, index=False)
         return output.getvalue()
 
-    def test_review_workbook_applies_address_override(self):
-        result = build_review_workbook(
+    def _review_result(self):
+        return build_review_workbook(
             [self._source_workbook_bytes()],
             target_amount=500000,
             target_region="천안",
@@ -51,6 +56,9 @@ class ReportServiceTests(unittest.TestCase):
             end_date=date(2026, 7, 31),
         )
 
+    def test_review_workbook_applies_address_override(self):
+        result = self._review_result()
+
         self.assertEqual(result["record_count"], 1)
         self.assertEqual(result["unresolved_address_count"], 0)
         self.assertGreaterEqual(result["filled_address_count"], 1)
@@ -61,6 +69,31 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(sheet.cell(7, 12).value, "충청남도 천안시 테스트로 1")
         self.assertEqual(sheet.cell(7, 13).value, "충남도내(관내)")
         self.assertEqual(sheet.cell(7, 14).value, "교육용")
+
+    def test_final_report_contains_four_official_sheets(self):
+        review = self._review_result()
+        final = build_final_halfyear_report(review["bytes"])
+
+        self.assertEqual(final["record_count"], 1)
+        self.assertEqual(final["region"], "천안")
+        self.assertEqual(final["institution"], "천안버들유치원")
+        self.assertEqual(final["year"], "2026")
+        self.assertEqual(final["label"], "상반기")
+
+        workbook = load_workbook(BytesIO(final["bytes"]))
+        self.assertEqual(workbook.sheetnames, REQUIRED_SHEETS)
+
+        review_sheet = workbook[REVIEW_SHEET]
+        self.assertEqual(review_sheet.cell(7, 12).value, "충청남도 천안시 테스트로 1")
+
+        goods = workbook["1-3. 총괄(물품)"]
+        self.assertEqual(goods["B6"].value, "천안")
+        self.assertEqual(goods["C6"].value, "천안버들유치원")
+        self.assertEqual(goods["E6"].value, "물품")
+        self.assertEqual(goods["F6"].value, 1)
+        self.assertEqual(goods["G6"].value, 750000)
+        self.assertEqual(goods["N6"].value, 1)
+        self.assertEqual(goods["O6"].value, 750000)
 
 
 if __name__ == "__main__":

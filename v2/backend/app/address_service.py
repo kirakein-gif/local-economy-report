@@ -8,6 +8,7 @@ import requests
 
 from .cache import DEFAULT_NEGATIVE_TTL, DEFAULT_POSITIVE_TTL, address_cache
 from .excel_service import normalize_biz_no
+from .manual_store import get_manual_address
 
 PROCUREMENT_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
 S2B_URL = "https://www.s2b.kr/S2BNCustomer/S2B/scrweb/common/search_api/search_json.jsp"
@@ -209,33 +210,49 @@ def get_local_franchise_address(biz_num):
     return None
 
 
+def _base_result(biz, **extra):
+    result = {
+        "biz_no": biz,
+        "address": "",
+        "source": "",
+        "found": False,
+        "cache_hit": False,
+        "cache_layer": "",
+        "cache_backend": address_cache.active_backend,
+        "manual_hit": False,
+        "invalid": False,
+    }
+    result.update(extra)
+    return result
+
+
 def lookup_address(biz_num, force_refresh=False):
     biz = normalize_biz_no(biz_num)
     if not biz:
-        return {
-            "biz_no": "",
-            "address": "",
-            "source": "",
-            "found": False,
-            "cache_hit": False,
-            "cache_layer": "",
-            "cache_backend": address_cache.active_backend,
-            "invalid": True,
-        }
+        return _base_result("", invalid=True)
+
+    manual = get_manual_address(biz)
+    if manual:
+        return _base_result(
+            biz,
+            address=manual.get("address", ""),
+            source="사용자 저장주소",
+            found=True,
+            manual_hit=True,
+            cache_layer=manual.get("backend", ""),
+        )
 
     if not force_refresh:
         cached = address_cache.get(biz)
         if cached is not None:
-            return {
-                "biz_no": biz,
-                "address": cached.get("address", ""),
-                "source": cached.get("source", ""),
-                "found": bool(cached.get("found")),
-                "cache_hit": True,
-                "cache_layer": cached.get("cache_layer", ""),
-                "cache_backend": address_cache.active_backend,
-                "invalid": False,
-            }
+            return _base_result(
+                biz,
+                address=cached.get("address", ""),
+                source=cached.get("source", ""),
+                found=bool(cached.get("found")),
+                cache_hit=True,
+                cache_layer=cached.get("cache_layer", ""),
+            )
 
     sources = [
         ("나라장터", get_procurement_address),
@@ -254,16 +271,12 @@ def lookup_address(biz_num, force_refresh=False):
                 found=True,
                 ttl_seconds=DEFAULT_POSITIVE_TTL,
             )
-            return {
-                "biz_no": biz,
-                "address": address,
-                "source": source,
-                "found": True,
-                "cache_hit": False,
-                "cache_layer": "",
-                "cache_backend": address_cache.active_backend,
-                "invalid": False,
-            }
+            return _base_result(
+                biz,
+                address=address,
+                source=source,
+                found=True,
+            )
 
     address_cache.set(
         biz,
@@ -272,16 +285,7 @@ def lookup_address(biz_num, force_refresh=False):
         found=False,
         ttl_seconds=DEFAULT_NEGATIVE_TTL,
     )
-    return {
-        "biz_no": biz,
-        "address": "",
-        "source": "",
-        "found": False,
-        "cache_hit": False,
-        "cache_layer": "",
-        "cache_backend": address_cache.active_backend,
-        "invalid": False,
-    }
+    return _base_result(biz)
 
 
 def bulk_lookup_addresses(biz_numbers, force_refresh=False):
@@ -320,19 +324,11 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
             try:
                 results_by_biz[biz] = future.result()
             except Exception:
-                results_by_biz[biz] = {
-                    "biz_no": biz,
-                    "address": "",
-                    "source": "",
-                    "found": False,
-                    "cache_hit": False,
-                    "cache_layer": "",
-                    "cache_backend": address_cache.active_backend,
-                    "invalid": False,
-                }
+                results_by_biz[biz] = _base_result(biz)
 
     results = [results_by_biz[biz] for biz in normalized]
     source_counts = {
+        "사용자 저장주소": 0,
         "나라장터": 0,
         "학교장터(S2B)": 0,
         "공정위 통신판매사업자": 0,
@@ -350,6 +346,7 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
         "found_count": sum(1 for item in results if item.get("found")),
         "not_found_count": sum(1 for item in results if not item.get("found")),
         "cache_hit_count": sum(1 for item in results if item.get("cache_hit")),
+        "manual_hit_count": sum(1 for item in results if item.get("manual_hit")),
         "source_counts": source_counts,
         "cache": address_cache.status(),
         "results": results,

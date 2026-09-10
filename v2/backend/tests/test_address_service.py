@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app import address_service
+from app import address_service, manual_store
 from app.cache import address_cache
 
 
@@ -9,11 +9,28 @@ class AddressServiceTests(unittest.TestCase):
     def setUp(self):
         with address_cache._lock:
             address_cache._local.clear()
+        with manual_store._local_lock:
+            manual_store._local_manual.clear()
 
     def test_invalid_business_number(self):
         result = address_service.lookup_address("123")
         self.assertFalse(result["found"])
         self.assertTrue(result["invalid"])
+
+    def test_saved_manual_address_has_priority(self):
+        manual_store.save_manual_address(
+            "123-45-67890",
+            "충청남도 천안시 저장주소 10",
+            "테스트업체",
+        )
+        with patch.object(address_service, "get_procurement_address") as procurement:
+            result = address_service.lookup_address("1234567890")
+
+        self.assertTrue(result["found"])
+        self.assertTrue(result["manual_hit"])
+        self.assertEqual(result["source"], "사용자 저장주소")
+        self.assertEqual(result["address"], "충청남도 천안시 저장주소 10")
+        procurement.assert_not_called()
 
     @patch.object(address_service, "get_local_franchise_address", return_value=None)
     @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
@@ -52,6 +69,7 @@ class AddressServiceTests(unittest.TestCase):
             "cache_hit": False,
             "cache_layer": "",
             "cache_backend": "memory",
+            "manual_hit": False,
             "invalid": False,
         }
 

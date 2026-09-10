@@ -16,6 +16,7 @@ COPY v2/backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY v2/backend/app ./app
+COPY halfy_report_template.xlsx ./templates/halfy_report_template.xlsx
 COPY --from=frontend-build /frontend/dist ./static
 
 EXPOSE 8080

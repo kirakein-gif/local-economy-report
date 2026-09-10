@@ -5,27 +5,28 @@
 ## 현재 구현 범위
 
 - React 업무앱형 UI
+- 자료 집계 · 검토파일 / 반기보고서 최종작성 화면 분리
 - 여러 Excel 파일 업로드
 - 지역 자동 감지 / 직접 선택
 - 계약금액 기준 설정
-- 보고 대상 건수 계산
-- 주소 누락 건수 계산
-- API 조회 가능 업체 추출
+- 보고 대상 건수 및 주소 누락 분석
 - 동일 사업자번호의 기존 주소 자동 전파
 - 사용자 저장주소 우선 조회
 - 나라장터 → 학교장터(S2B) → 공정위 → 지역화폐 주소 조회
 - 단건 / 일괄 FastAPI 주소조회 API
 - 성공 결과 24시간 캐시, 실패 결과 15분 캐시
 - Firestore 공유 캐시 선택 지원
-- 주소조회 출처별 결과 및 캐시 재사용 건수 UI 표시
 - API 미확인 업체 직접 주소 입력 UI
 - 사업자번호가 있는 수동 주소의 공유 저장 지원
-- API/수동 주소를 원본 빈 주소에 실제 반영
-- 기존 공식 `halfy_report_template.xlsx`를 사용한 검토용 1-4 Excel 생성
-- 검토용 Excel 브라우저 다운로드
-- FastAPI 헬스체크 및 설정 API
+- API/수동 주소를 원본의 빈 주소에 실제 반영
+- 공식 반기양식 Base64 조각 복원 및 구조 검증
+- 공식 1-4 검토용 Excel 생성 및 다운로드
+- 검토 완료 Excel 파싱
+- 사용자가 수정한 주소·소재지·구입목적 값을 최종값으로 반영
+- 소재지 및 물품 구입목적 비정상 값 자동 보정
+- 공식 1-1~1-4 최종 4시트 반기보고서 생성 및 다운로드
 - 단일 Docker 컨테이너 구성
-- GitHub Actions: Python compile/import/unit tests + React production build
+- GitHub Actions: Python compile/import/unit tests + React production build + Docker image build
 
 ## 주소 저장 및 캐시 구조
 
@@ -60,10 +61,11 @@ DATAGOKR=...
 - `POST /api/address/bulk`
 - `POST /api/manual/save`
 - `POST /api/prepare/review`
+- `POST /api/final/report`
 
 일괄 주소조회는 한 번에 최대 200개 업체까지 받으며, 병렬 조회 수는 기본 2개로 제한합니다.
 
-## 자료 집계 흐름
+## 전체 업무 흐름
 
 1. 자료관리목록 Excel 업로드
 2. 대상 지역 및 금액 기준 확인
@@ -74,16 +76,19 @@ DATAGOKR=...
 7. API/수동 주소를 빈 주소에 반영
 8. 공식 1-4 서식 검토용 Excel 다운로드
 9. 사용자가 검토용 Excel 확인 및 수정
-10. 최종 반기보고서 생성 메뉴로 재업로드
+10. 반기보고서 최종작성 메뉴에 검토 완료 파일 업로드
+11. 1-1 공사 / 1-2 용역 / 1-3 물품 / 1-4 기초자료 최종 4시트 생성
+12. 최종 반기보고서 다운로드
 
-## 다음 연결 대상
+## 다음 단계
 
-1. 기존 `excel_reports.py`의 검토파일 파싱 로직을 v2로 이전
-2. 반기보고서 1-1~1-4 최종 4시트 생성 연결
-3. 실제 Cloud Run 시험 배포
-4. Firestore 및 Secret Manager 운영 설정
-5. 기존 Streamlit 결과와 실제 파일 비교 검증
-6. 동시 사용자 부하 테스트 후 concurrency / max instances 조정
+1. GitHub Actions 전체 성공 확인
+2. 기존 Streamlit과 동일 샘플 파일로 결과 비교 검증
+3. Google Cloud 프로젝트에서 Firestore 및 Secret Manager 설정
+4. Cloud Run 시험 배포
+5. 동시 사용자 부하 테스트
+6. 실제 피크 사용량에 맞춰 concurrency / max instances / CPU / memory 조정
+7. 충분히 검증한 뒤 대표 접속 주소 전환
 
 ## 전환 원칙
 

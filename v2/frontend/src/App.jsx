@@ -29,7 +29,7 @@ export default function App() {
           <div className="brand-mark">▦</div>
           <div>
             <strong>지역경제활성화</strong>
-            <span>자동 집계 시스템</span>
+            <span>실적 자동 집계</span>
           </div>
         </div>
 
@@ -50,11 +50,14 @@ export default function App() {
         </button>
 
         <div className="sidebar-spacer" />
+        <div className="developer-note">
+          <b>천안버들유치원 · 나대현</b>
+          <span>지역경제활성화 실적 자동 집계</span>
+        </div>
         <div className="side-note">
-          <b>v2 Cloud Run 전환판</b>
+          <b>Cloud Run 운영 상태</b>
           <span>{cacheName}</span>
           <span>{manualStoreName}</span>
-          <span>기존 Streamlit 운영판과 분리 개발 중</span>
         </div>
       </aside>
 
@@ -64,18 +67,18 @@ export default function App() {
             <div className="eyebrow">CHUNGNAM · LOCAL ECONOMY</div>
             <h1>
               {isPrepare
-                ? "지역경제 활성화 계약자료 주소 정리"
+                ? "지역경제활성화 실적 자동 집계"
                 : "반기보고서 최종작성"}
             </h1>
             <p>
               {isPrepare
-                ? "계약자료를 업로드하고 주소를 보완한 뒤 검토용 기초자료를 생성합니다."
+                ? "계약자료를 업로드하면 주소를 자동 조회·보완하고 검토용 기초자료까지 생성합니다."
                 : "검토가 끝난 기초자료를 업로드해 공식 1-1~1-4 최종 보고서를 생성합니다."}
             </p>
           </div>
           <div className="hero-status">
             <span className="status-dot" />
-            Cloud Run 자동확장 구조
+            Cloud Run 자동확장
           </div>
         </section>
 

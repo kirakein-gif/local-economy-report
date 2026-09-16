@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 function formatNumber(value) {
   return new Intl.NumberFormat("ko-KR").format(Number(value || 0));
@@ -15,12 +15,18 @@ function downloadNameFromHeader(headerValue) {
   }
 }
 
+function isExcelFile(file) {
+  return /\.(xlsx|xls)$/i.test(file?.name || "");
+}
+
 export default function PrepareWorkflow({ config }) {
   const regions = config?.regions || [
     "천안", "아산", "공주", "보령", "서산", "논산", "계룡", "당진",
     "금산", "부여", "서천", "청양", "홍성", "예산", "태안",
   ];
   const [files, setFiles] = useState([]);
+  const [dragActive, setDragActive] = useState(false);
+  const dragCounter = useRef(0);
   const [regionMode, setRegionMode] = useState("auto");
   const [manualRegion, setManualRegion] = useState(regions[0] || "천안");
   const [targetAmount, setTargetAmount] = useState(config?.default_target_amount || 500000);
@@ -57,6 +63,57 @@ export default function PrepareWorkflow({ config }) {
   const enteredManualCount = unresolvedCandidates.filter((item) =>
     String(manualAddresses[item.lookup_key] || "").trim()
   ).length;
+
+  function clearDerivedState() {
+    setResult(null);
+    setAddressResult(null);
+    setManualAddresses({});
+    setSaveStatus({});
+    setReviewInfo(null);
+  }
+
+  function applyFiles(fileList) {
+    const incoming = Array.from(fileList || []);
+    const valid = incoming.filter(isExcelFile);
+    if (incoming.length && valid.length !== incoming.length) {
+      setError("Excel 파일(.xlsx, .xls)만 업로드할 수 있습니다.");
+    } else {
+      setError("");
+    }
+    setFiles(valid);
+    clearDerivedState();
+  }
+
+  function handleDragEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current += 1;
+    setDragActive(true);
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setDragActive(false);
+    }
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current = 0;
+    setDragActive(false);
+    applyFiles(event.dataTransfer.files);
+  }
 
   async function inspectFiles() {
     if (!files.length) {
@@ -226,20 +283,24 @@ export default function PrepareWorkflow({ config }) {
             <div><span className="step">STEP 01</span><h2>자료 입력</h2></div>
             <div className="icon-box">↥</div>
           </div>
-          <label className="dropzone">
+          <label
+            className={dragActive ? "dropzone dragging" : "dropzone"}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
             <input
               type="file"
               accept=".xlsx,.xls"
               multiple
               onChange={(event) => {
-                setFiles(Array.from(event.target.files || []));
-                setResult(null);
-                setAddressResult(null);
-                setReviewInfo(null);
+                applyFiles(event.target.files);
+                event.target.value = "";
               }}
             />
-            <strong>엑셀 파일을 선택하거나 끌어 놓으세요</strong>
-            <span>자료관리목록 Excel · 여러 파일 동시 선택 가능</span>
+            <strong>{files.length ? `Excel 파일 ${files.length}개 선택됨` : "엑셀 파일을 선택하거나 끌어 놓으세요"}</strong>
+            <span>{files.length ? "클릭하거나 다른 파일을 끌어 놓으면 선택 파일을 교체합니다." : "자료관리목록 Excel · 여러 파일 동시 선택 가능"}</span>
           </label>
           <div className="file-summary">
             <span>선택 파일 <b>{files.length}개</b></span>

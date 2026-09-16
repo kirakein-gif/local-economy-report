@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY v2/backend/app ./app
 COPY template_parts ./template_parts
+COPY legacy_quarter_app.py ./legacy_quarter_app.py
 COPY --from=frontend-build /frontend/dist ./static
 
 EXPOSE 8080

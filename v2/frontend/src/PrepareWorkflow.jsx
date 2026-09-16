@@ -12,14 +12,14 @@ function formatNumber(value) {
   return new Intl.NumberFormat("ko-KR").format(Number(value || 0));
 }
 
-function downloadNameFromHeader(headerValue) {
-  if (!headerValue) return "지역경제활성화_검토용.xlsx";
+function downloadNameFromHeader(headerValue, fallback) {
+  if (!headerValue) return fallback;
   const match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
-  if (!match) return "지역경제활성화_검토용.xlsx";
+  if (!match) return fallback;
   try {
     return decodeURIComponent(match[1]);
   } catch {
-    return "지역경제활성화_검토용.xlsx";
+    return fallback;
   }
 }
 
@@ -61,6 +61,9 @@ function Icon({ type, size = 28 }) {
   if (type === "pencil") {
     return <svg {...common}><path d="m4 20 4.2-1 10.3-10.3-3.2-3.2L5 15.8z"/><path d="m13.8 7 3.2 3.2"/></svg>;
   }
+  if (type === "download") {
+    return <svg {...common}><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 20h14"/></svg>;
+  }
   return null;
 }
 
@@ -81,6 +84,7 @@ export default function PrepareWorkflow({ config }) {
   const [saveStatus, setSaveStatus] = useState({});
   const [busy, setBusy] = useState(false);
   const [addressBusy, setAddressBusy] = useState(false);
+  const [quarterBusy, setQuarterBusy] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewInfo, setReviewInfo] = useState(null);
   const [error, setError] = useState("");
@@ -145,6 +149,38 @@ export default function PrepareWorkflow({ config }) {
     }
     setFiles(valid);
     clearDerivedState();
+  }
+
+  function currentAddressOverrides() {
+    const business = { ...foundByBiz };
+    const rows = {};
+    for (const candidate of unresolvedCandidates) {
+      const address = String(manualAddresses[candidate.lookup_key] || "").trim();
+      if (!address) continue;
+      if (candidate.biz_no) business[candidate.biz_no] = address;
+      else rows[String(candidate.row_id)] = address;
+    }
+    return { business, rows };
+  }
+
+  function appendCommonReportFields(form) {
+    files.forEach((file) => form.append("files", file));
+    form.append("target_amount", String(targetAmount));
+    form.append("region_mode", regionMode);
+    form.append("manual_region", manualRegion);
+    form.append("address_overrides_json", JSON.stringify(currentAddressOverrides()));
+  }
+
+  async function saveResponseFile(response, fallbackName) {
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = downloadNameFromHeader(response.headers.get("Content-Disposition"), fallbackName);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   function handleDragEnter(event) {
@@ -268,17 +304,33 @@ export default function PrepareWorkflow({ config }) {
     }
   }
 
+  async function createQuarterReport() {
+    if (!files.length || !result) return;
+    const form = new FormData();
+    appendCommonReportFields(form);
+
+    setQuarterBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/prepare/quarter", { method: "POST", body: form });
+      if (!response.ok) {
+        let detail = "분기보고서 생성에 실패했습니다.";
+        try {
+          const data = await response.json();
+          detail = data.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      await saveResponseFile(response, `지역경제활성화_실적보고(${result.target_region}기준).xlsx`);
+    } catch (err) {
+      setError(err.message || "분기보고서 생성 중 오류가 발생했습니다.");
+    } finally {
+      setQuarterBusy(false);
+    }
+  }
+
   async function createReviewWorkbook() {
     if (!files.length || !result) return;
-
-    const business = { ...foundByBiz };
-    const rows = {};
-    for (const candidate of unresolvedCandidates) {
-      const address = String(manualAddresses[candidate.lookup_key] || "").trim();
-      if (!address) continue;
-      if (candidate.biz_no) business[candidate.biz_no] = address;
-      else rows[String(candidate.row_id)] = address;
-    }
 
     const report = config?.default_report || {
       year: 2026,
@@ -288,11 +340,7 @@ export default function PrepareWorkflow({ config }) {
     };
 
     const form = new FormData();
-    files.forEach((file) => form.append("files", file));
-    form.append("target_amount", String(targetAmount));
-    form.append("region_mode", regionMode);
-    form.append("manual_region", manualRegion);
-    form.append("address_overrides_json", JSON.stringify({ business, rows }));
+    appendCommonReportFields(form);
     form.append("report_year", String(report.year));
     form.append("report_label", report.label);
     form.append("start_date", report.start_date);
@@ -312,16 +360,7 @@ export default function PrepareWorkflow({ config }) {
         throw new Error(detail);
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = downloadNameFromHeader(response.headers.get("Content-Disposition"));
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-
+      await saveResponseFile(response, "지역경제활성화_검토용.xlsx");
       setReviewInfo({
         recordCount: Number(response.headers.get("X-Record-Count") || 0),
         filledCount: Number(response.headers.get("X-Filled-Address-Count") || 0),
@@ -521,7 +560,7 @@ export default function PrepareWorkflow({ config }) {
               {unresolvedCandidates.length > 0 && (
                 <div className="manual-panel">
                   <div className="manual-head">
-                    <div><span className="step">STEP 04</span><h3>주소 미확인 업체 직접 보완</h3><p>입력 주소는 이번 검토파일에 반영되며, 사업자번호가 있으면 공유 저장할 수 있습니다.</p></div>
+                    <div><span className="step">STEP 04</span><h3>주소 미확인 업체 직접 보완</h3><p>입력 주소는 결과 파일에 반영되며, 사업자번호가 있으면 공유 저장할 수 있습니다.</p></div>
                     <span className="manual-progress">입력 {enteredManualCount}/{unresolvedCandidates.length}</span>
                   </div>
                   <div className="manual-list">
@@ -545,9 +584,33 @@ export default function PrepareWorkflow({ config }) {
                 </div>
               )}
 
-              <div className="review-panel">
-                <div><span className="step">STEP 05</span><h3>검토용 기초자료 생성</h3><p>확인된 주소를 빈 주소에 반영한 뒤 공식 1-4 서식으로 생성합니다.</p></div>
-                <button className="primary" disabled={reviewBusy} onClick={createReviewWorkbook}>{reviewBusy ? "Excel 생성 중..." : "검토용 Excel 다운로드"}</button>
+              <div className="result-files-head">
+                <span className="step">STEP 05</span>
+                <h3>결과 파일 다운로드</h3>
+                <p>분기 제출용 실적보고서와 반기 검토용 기초자료를 각각 생성할 수 있습니다.</p>
+              </div>
+              <div className="result-files-grid">
+                <article className="result-file-card quarter-file-card">
+                  <div className="result-file-icon"><Icon type="document" size={28} /></div>
+                  <div className="result-file-copy">
+                    <h4>분기별 실적보고서</h4>
+                    <p>기존 분기 제출서식에 공사·용역·물품의 관내·충남관외·타시도 실적을 자동 집계합니다.</p>
+                  </div>
+                  <button className="primary" disabled={quarterBusy} onClick={createQuarterReport}>
+                    <Icon type="download" size={18} />{quarterBusy ? "분기보고서 생성 중..." : "분기보고서 다운로드"}
+                  </button>
+                </article>
+
+                <article className="result-file-card review-file-card">
+                  <div className="result-file-icon green"><Icon type="document" size={28} /></div>
+                  <div className="result-file-copy">
+                    <h4>반기 검토용 기초자료</h4>
+                    <p>확인된 주소를 반영한 공식 1-4 기초자료입니다. 검토·수정 후 최종작성 메뉴에서 다시 업로드합니다.</p>
+                  </div>
+                  <button className="primary" disabled={reviewBusy} onClick={createReviewWorkbook}>
+                    <Icon type="download" size={18} />{reviewBusy ? "검토용 Excel 생성 중..." : "검토용 Excel 다운로드"}
+                  </button>
+                </article>
               </div>
 
               {reviewInfo && (

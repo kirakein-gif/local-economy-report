@@ -20,9 +20,10 @@ from .cache import address_cache
 from .excel_service import CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, inspect_workbooks
 from .manual_store import backend_name as manual_backend_name
 from .manual_store import save_manual_address
+from .quarter_service import build_quarter_report
 from .report_service import build_final_halfyear_report, build_review_workbook
 
-APP_VERSION = "2.0.0-alpha.4"
+APP_VERSION = "2.0.0-alpha.5"
 MAX_FILES = 20
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TOTAL_BYTES = 120 * 1024 * 1024
@@ -103,6 +104,17 @@ async def _read_upload_payloads(files):
         payloads.append(content)
 
     return payloads
+
+
+def _parse_address_overrides(address_overrides_json):
+    overrides = json.loads(address_overrides_json or "{}")
+    if not isinstance(overrides, dict):
+        raise ValueError("주소 보완 데이터 형식이 올바르지 않습니다.")
+    business_addresses = overrides.get("business", {}) or {}
+    row_addresses = overrides.get("rows", {}) or {}
+    if not isinstance(business_addresses, dict) or not isinstance(row_addresses, dict):
+        raise ValueError("주소 보완 데이터 형식이 올바르지 않습니다.")
+    return business_addresses, row_addresses
 
 
 @app.get("/api/health")
@@ -198,6 +210,55 @@ async def prepare_inspect(
         ) from exc
 
 
+@app.post("/api/prepare/quarter")
+async def prepare_quarter(
+    files: list[UploadFile] = File(...),
+    target_amount: int = Form(DEFAULT_TARGET_AMOUNT),
+    region_mode: str = Form("auto"),
+    manual_region: str = Form(""),
+    address_overrides_json: str = Form("{}"),
+):
+    if target_amount < 0:
+        raise HTTPException(status_code=400, detail="기준 금액은 0원 이상이어야 합니다.")
+
+    payloads = await _read_upload_payloads(files)
+
+    try:
+        business_addresses, row_addresses = _parse_address_overrides(address_overrides_json)
+        inspection = inspect_workbooks(
+            payloads,
+            target_amount=target_amount,
+            manual_region=manual_region if region_mode == "manual" else "",
+        )
+        target_region = inspection["target_region"]
+        result = build_quarter_report(
+            payloads,
+            target_amount=target_amount,
+            target_region=target_region,
+            business_addresses=business_addresses,
+            row_addresses=row_addresses,
+        )
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"분기보고서 생성 중 오류가 발생했습니다: {exc}",
+        ) from exc
+
+    filename = f"지역경제활성화_실적보고({target_region}기준).xlsx"
+    encoded_filename = quote(filename)
+    return StreamingResponse(
+        BytesIO(result["bytes"]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "X-Record-Count": str(result["record_count"]),
+            "X-Region": quote(target_region),
+        },
+    )
+
+
 @app.post("/api/prepare/review")
 async def prepare_review(
     files: list[UploadFile] = File(...),
@@ -216,14 +277,7 @@ async def prepare_review(
     payloads = await _read_upload_payloads(files)
 
     try:
-        overrides = json.loads(address_overrides_json or "{}")
-        if not isinstance(overrides, dict):
-            raise ValueError("주소 보완 데이터 형식이 올바르지 않습니다.")
-        business_addresses = overrides.get("business", {}) or {}
-        row_addresses = overrides.get("rows", {}) or {}
-        if not isinstance(business_addresses, dict) or not isinstance(row_addresses, dict):
-            raise ValueError("주소 보완 데이터 형식이 올바르지 않습니다.")
-
+        business_addresses, row_addresses = _parse_address_overrides(address_overrides_json)
         report_start = date.fromisoformat(start_date)
         report_end = date.fromisoformat(end_date)
         if report_end < report_start:

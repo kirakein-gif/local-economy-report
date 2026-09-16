@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 function downloadNameFromHeader(headerValue) {
   if (!headerValue) return "지역경제활성화_최종보고서.xlsx";
@@ -15,11 +15,60 @@ function formatNumber(value) {
   return new Intl.NumberFormat("ko-KR").format(Number(value || 0));
 }
 
+function isExcelFile(file) {
+  return /\.(xlsx|xls)$/i.test(file?.name || "");
+}
+
 export default function FinalReport() {
   const [file, setFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+  const dragCounter = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState(null);
+
+  function applyFile(nextFile) {
+    if (nextFile && !isExcelFile(nextFile)) {
+      setFile(null);
+      setError("Excel 파일(.xlsx, .xls)만 업로드할 수 있습니다.");
+      setInfo(null);
+      return;
+    }
+    setFile(nextFile || null);
+    setError("");
+    setInfo(null);
+  }
+
+  function handleDragEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current += 1;
+    setDragActive(true);
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setDragActive(false);
+    }
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current = 0;
+    setDragActive(false);
+    applyFile(event.dataTransfer.files?.[0] || null);
+  }
 
   async function createFinalReport() {
     if (!file) {
@@ -87,18 +136,23 @@ export default function FinalReport() {
           사용자가 Excel에서 수정한 주소, 소재지, 구입목적 등의 값을 최종값으로 사용합니다.
         </p>
 
-        <label className="dropzone final-dropzone">
+        <label
+          className={dragActive ? "dropzone final-dropzone dragging" : "dropzone final-dropzone"}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
           <input
             type="file"
             accept=".xlsx,.xls"
             onChange={(event) => {
-              setFile(event.target.files?.[0] || null);
-              setError("");
-              setInfo(null);
+              applyFile(event.target.files?.[0] || null);
+              event.target.value = "";
             }}
           />
           <strong>{file ? file.name : "검토 완료 Excel 파일을 선택하거나 끌어 놓으세요"}</strong>
-          <span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "1-4 기초자료가 포함된 검토용 파일"}</span>
+          <span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 클릭하거나 다른 파일을 끌어 놓으면 교체됩니다.` : "1-4 기초자료가 포함된 검토용 파일"}</span>
         </label>
       </article>
 

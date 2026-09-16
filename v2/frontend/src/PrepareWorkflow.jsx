@@ -1,5 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 
+const AMOUNT_PRESETS = [
+  { value: 0, label: "0원" },
+  { value: 100000, label: "10만원" },
+  { value: 500000, label: "50만원" },
+  { value: 1000000, label: "100만원" },
+  { value: 10000000, label: "1,000만원" },
+];
+
 function formatNumber(value) {
   return new Intl.NumberFormat("ko-KR").format(Number(value || 0));
 }
@@ -17,6 +25,43 @@ function downloadNameFromHeader(headerValue) {
 
 function isExcelFile(file) {
   return /\.(xlsx|xls)$/i.test(file?.name || "");
+}
+
+function Icon({ type, size = 28 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+
+  if (type === "document") {
+    return <svg {...common}><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h3M9 11h6M9 15h6M9 19h4"/></svg>;
+  }
+  if (type === "upload") {
+    return <svg {...common} viewBox="0 0 64 54"><path d="M20 41H16a12 12 0 0 1-1-24 17 17 0 0 1 33-1 12 12 0 0 1 1 25h-5"/><path d="M32 48V27m-9 8 9-9 9 9"/></svg>;
+  }
+  if (type === "filter") {
+    return <svg {...common}><path d="M4 5h16l-6.5 7.2V19l-3 1v-7.8z"/></svg>;
+  }
+  if (type === "pin") {
+    return <svg {...common}><path d="M20 10c0 5.4-8 11-8 11S4 15.4 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.6"/></svg>;
+  }
+  if (type === "search") {
+    return <svg {...common}><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg>;
+  }
+  if (type === "reuse") {
+    return <svg {...common}><path d="M20 8a8 8 0 0 0-13-3L5 7"/><path d="M5 3v4h4M4 16a8 8 0 0 0 13 3l2-2"/><path d="M19 21v-4h-4"/></svg>;
+  }
+  if (type === "pencil") {
+    return <svg {...common}><path d="m4 20 4.2-1 10.3-10.3-3.2-3.2L5 15.8z"/><path d="m13.8 7 3.2 3.2"/></svg>;
+  }
+  return null;
 }
 
 export default function PrepareWorkflow({ config }) {
@@ -64,12 +109,30 @@ export default function PrepareWorkflow({ config }) {
     String(manualAddresses[item.lookup_key] || "").trim()
   ).length;
 
+  const amountSliderIndex = useMemo(() => {
+    let best = 0;
+    let distance = Infinity;
+    AMOUNT_PRESETS.forEach((preset, index) => {
+      const current = Math.abs(preset.value - targetAmount);
+      if (current < distance) {
+        distance = current;
+        best = index;
+      }
+    });
+    return best;
+  }, [targetAmount]);
+
   function clearDerivedState() {
     setResult(null);
     setAddressResult(null);
     setManualAddresses({});
     setSaveStatus({});
     setReviewInfo(null);
+  }
+
+  function changeTargetAmount(value) {
+    setTargetAmount(Math.max(0, Number(value) || 0));
+    clearDerivedState();
   }
 
   function applyFiles(fileList) {
@@ -123,11 +186,7 @@ export default function PrepareWorkflow({ config }) {
 
     setBusy(true);
     setError("");
-    setResult(null);
-    setAddressResult(null);
-    setManualAddresses({});
-    setSaveStatus({});
-    setReviewInfo(null);
+    clearDerivedState();
 
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
@@ -277,14 +336,18 @@ export default function PrepareWorkflow({ config }) {
 
   return (
     <>
-      <section className="grid two">
-        <article className="card">
-          <div className="card-head">
-            <div><span className="step">STEP 01</span><h2>자료 입력</h2></div>
-            <div className="icon-box">↥</div>
+      <section className="grid two streamlit-top-grid">
+        <article className="card top-card upload-card-rich">
+          <div className="panel-heading">
+            <div className="panel-heading-icon blue"><Icon type="document" /></div>
+            <div>
+              <h2>자료 입력</h2>
+              <p>계약자료 엑셀 파일을 업로드하세요. 여러 파일을 한 번에 선택할 수 있습니다.</p>
+            </div>
           </div>
+
           <label
-            className={dragActive ? "dropzone dragging" : "dropzone"}
+            className={dragActive ? "dropzone rich-dropzone dragging" : "dropzone rich-dropzone"}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
@@ -299,52 +362,99 @@ export default function PrepareWorkflow({ config }) {
                 event.target.value = "";
               }}
             />
-            <strong>{files.length ? `Excel 파일 ${files.length}개 선택됨` : "엑셀 파일을 선택하거나 끌어 놓으세요"}</strong>
-            <span>{files.length ? "클릭하거나 다른 파일을 끌어 놓으면 선택 파일을 교체합니다." : "자료관리목록 Excel · 여러 파일 동시 선택 가능"}</span>
+            <div className="upload-cloud"><Icon type="upload" size={64} /></div>
+            <strong>{files.length ? `Excel 파일 ${files.length}개 선택됨` : "여기에 파일을 드래그하거나 클릭하여 업로드하세요"}</strong>
+            <span>{files.length ? "클릭하거나 다른 파일을 끌어 놓으면 선택 파일을 교체합니다." : "Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다."}</span>
+            <span className="fake-file-button">파일 선택하기</span>
           </label>
+
+          <div className="upload-checks-react">
+            <span>✓ 파일을 드래그해서 놓아도 업로드할 수 있습니다.</span>
+            <span>✓ 선택한 파일은 현재 작업 중에만 임시 사용됩니다.</span>
+          </div>
           <div className="file-summary">
             <span>선택 파일 <b>{files.length}개</b></span>
             <span>총 용량 <b>{(totalSize / 1024 / 1024).toFixed(1)} MB</b></span>
           </div>
         </article>
 
-        <article className="card">
-          <div className="card-head">
-            <div><span className="step">STEP 02</span><h2>집계 기준</h2></div>
-            <div className="icon-box">⌁</div>
-          </div>
-          <div className="field">
-            <label>지역 선택 방식</label>
-            <div className="segmented">
-              <button className={regionMode === "auto" ? "selected" : ""} onClick={() => setRegionMode("auto")}>자동 선택</button>
-              <button className={regionMode === "manual" ? "selected" : ""} onClick={() => setRegionMode("manual")}>직접 선택</button>
+        <article className="card top-card conditions-card">
+          <div className="panel-heading compact">
+            <div className="panel-heading-icon navy"><Icon type="filter" /></div>
+            <div>
+              <h2>검색 조건</h2>
+              <p>지역과 집계 기준 금액을 선택합니다.</p>
             </div>
           </div>
-          <div className="field">
-            <label>대상 지역</label>
-            <select value={manualRegion} disabled={regionMode === "auto"} onChange={(event) => setManualRegion(event.target.value)}>
+
+          <div className="condition-section">
+            <label className="condition-label">기준 지역</label>
+            <div className="segmented region-segmented">
+              <button className={regionMode === "auto" ? "selected" : ""} onClick={() => { setRegionMode("auto"); clearDerivedState(); }}>자동 선택</button>
+              <button className={regionMode === "manual" ? "selected" : ""} onClick={() => { setRegionMode("manual"); clearDerivedState(); }}>직접 선택</button>
+            </div>
+            <select value={manualRegion} disabled={regionMode === "auto"} onChange={(event) => { setManualRegion(event.target.value); clearDerivedState(); }}>
               {regions.map((region) => <option value={region} key={region}>{region}</option>)}
             </select>
+            {regionMode === "auto" && <div className="auto-region-note">파일 업로드 후 주소를 기준으로 자동 선택합니다.</div>}
           </div>
-          <div className="field">
-            <label>계약금액 기준</label>
-            <div className="money-input">
-              <input type="number" min="0" step="10000" value={targetAmount} onChange={(event) => setTargetAmount(Number(event.target.value || 0))} />
-              <span>원 이상</span>
+
+          <div className="condition-section amount-section">
+            <div className="condition-label-row">
+              <label className="condition-label">집계 기준 금액 <span>(원 이상)</span></label>
+              <b>{formatNumber(targetAmount)}원</b>
+            </div>
+
+            <div className="amount-presets">
+              {AMOUNT_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  className={targetAmount === preset.value ? "active" : ""}
+                  onClick={() => changeTargetAmount(preset.value)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="amount-slider-wrap">
+              <input
+                className="amount-slider"
+                type="range"
+                min="0"
+                max={AMOUNT_PRESETS.length - 1}
+                step="1"
+                value={amountSliderIndex}
+                onChange={(event) => changeTargetAmount(AMOUNT_PRESETS[Number(event.target.value)].value)}
+              />
+              <div className="slider-labels">
+                {AMOUNT_PRESETS.map((preset) => <span key={preset.value}>{preset.label}</span>)}
+              </div>
+            </div>
+
+            <div className="direct-amount">
+              <span>직접 금액 입력</span>
+              <div className="money-input compact-money">
+                <input type="number" min="0" step="10000" value={targetAmount} onChange={(event) => changeTargetAmount(event.target.value)} />
+                <span>원</span>
+              </div>
             </div>
           </div>
         </article>
       </section>
 
-      <section className="action-row">
-        <div><strong>계약자료 1차 분석</strong><span>보고 대상, 주소 누락, API 조회 가능 업체를 확인합니다.</span></div>
-        <button className="primary" disabled={busy} onClick={inspectFiles}>{busy ? "분석 중..." : "파일 분석 시작"}</button>
+      <section className={files.length ? "action-row analysis-action ready" : "action-row analysis-action waiting"}>
+        <div>
+          <strong>{files.length ? "자료 분석 준비 완료" : "자료 업로드 대기"}</strong>
+          <span>{files.length ? `선택 파일 ${files.length}개 · ${formatNumber(targetAmount)}원 이상 계약을 분석합니다.` : "파일을 선택하면 보고 대상과 주소 보완 대상을 확인합니다."}</span>
+        </div>
+        <button className="primary" disabled={busy || !files.length} onClick={inspectFiles}>{busy ? "분석 중..." : "파일 분석 시작"}</button>
       </section>
 
       {error && <div className="alert error">{error}</div>}
 
       {result && (
-        <section className="results">
+        <section className="results visual-results">
           <div className="result-title">
             <div><span className="step">ANALYSIS</span><h2>분석 결과</h2></div>
             <span className="pill">{result.target_region} 기준</span>
@@ -359,11 +469,35 @@ export default function PrepareWorkflow({ config }) {
             기관: <b>{result.institution || "자동 확인 실패"}</b> · 자동 감지 지역: <b>{result.auto_region}</b> · API 조회 후보: <b>{formatNumber(result.api_lookup_candidate_count)}개 업체</b> · 기준 금액: <b>{formatNumber(result.target_amount)}원</b>
           </div>
 
-          <div className="address-action">
-            <div><span className="step">STEP 03</span><h3>공공 API · 저장주소 조회</h3><p>저장주소를 먼저 확인한 뒤 나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 조회합니다.</p></div>
-            <button className="primary" disabled={addressBusy || !!addressResult} onClick={lookupAddresses}>
-              {addressBusy ? "주소 조회 중..." : addressResult ? "주소 조회 완료" : `주소 조회 시작 · ${formatNumber(result.api_lookup_candidate_count)}개 업체`}
-            </button>
+          <div className="workflow-section-head">
+            <div className="workflow-pin"><Icon type="pin" size={32} /></div>
+            <div><h3>주소 보완</h3><p>저장된 주소와 공공 API를 활용해 자동으로 채운 뒤, 남은 업체만 직접 입력합니다.</p></div>
+          </div>
+
+          <div className="address-workflow-grid">
+            <article className="workflow-card blue-card">
+              <div className="workflow-card-title"><span className="step-number">1</span><h3>자동 주소 조회</h3></div>
+              <p>저장주소를 먼저 확인하고 나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 조회합니다.</p>
+              <button className="workflow-action blue-action" disabled={addressBusy || !!addressResult} onClick={lookupAddresses}>
+                <Icon type="search" size={20} />
+                {addressBusy ? "주소 조회 중..." : addressResult ? "주소 조회 완료" : `주소 조회 시작 · ${formatNumber(result.api_lookup_candidate_count)}개 업체`}
+              </button>
+              <div className="workflow-stat">조회 대상 <b>{formatNumber(result.api_lookup_candidate_count)}개 업체</b></div>
+            </article>
+
+            <article className="workflow-card green-card">
+              <div className="workflow-card-title"><span className="step-number">2</span><h3>저장주소 재사용</h3></div>
+              <p>이전에 확인한 업체 주소와 Firestore 캐시를 자동으로 불러와 반복 조회를 줄입니다.</p>
+              <div className="workflow-action green-action static"><Icon type="reuse" size={20} />자동 재사용</div>
+              <div className="workflow-stat">{addressResult ? <>이번 실행 재사용 <b>{formatNumber((addressResult.cache_hit_count || 0) + (addressResult.manual_hit_count || 0))}개</b></> : <>조회 후 재사용 건수를 표시합니다.</>}</div>
+            </article>
+
+            <article className="workflow-card orange-card">
+              <div className="workflow-card-title"><span className="step-number">3</span><h3>남은 주소 직접 입력</h3></div>
+              <p>자동 조회로 찾지 못한 업체만 직접 확인하고 주소를 저장해 다음 작업에 재사용합니다.</p>
+              <div className="workflow-action orange-action static"><Icon type="pencil" size={20} />{addressResult ? `주소 미확인 ${formatNumber(unresolvedCandidates.length)}개` : "자동 조회 후 활성화"}</div>
+              <div className="workflow-stat">{addressResult ? <>직접 입력 필요 <b>{formatNumber(unresolvedCandidates.length)}개 업체</b></> : <>먼저 자동 주소 조회를 실행하세요.</>}</div>
+            </article>
           </div>
 
           {addressResult && (

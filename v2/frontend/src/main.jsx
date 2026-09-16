@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles.css";
 import "./final.css";
 import "./streamlit-theme.css";
+import "./workflow-rich.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

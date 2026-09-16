@@ -264,5 +264,12 @@
     "previous_address": "",
     "status": "manual",
     "updated_at": "2026-09-04T06:50:36+00:00"
+  },
+  "7919800684": {
+    "address": "충남 홍성군",
+    "company_name": "홍주해운",
+    "previous_address": "",
+    "status": "manual",
+    "updated_at": "2026-09-16T06:01:58+00:00"
   }
 }

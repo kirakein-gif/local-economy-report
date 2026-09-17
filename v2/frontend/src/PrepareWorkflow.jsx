@@ -180,7 +180,7 @@ export default function PrepareWorkflow({ config }) {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function handleDragEnter(event) {
@@ -373,6 +373,45 @@ export default function PrepareWorkflow({ config }) {
     }
   }
 
+  const resultFiles = (
+    <>
+      <div className="result-files-head">
+        <span className="step">RESULT</span>
+        <h3>결과 파일 다운로드</h3>
+        <p>주소 보완은 선택사항입니다. 주소가 비어 있어도 분기보고서와 검토용 기초자료를 생성할 수 있습니다.</p>
+      </div>
+      <div className="result-files-grid">
+        <article className="result-file-card quarter-file-card">
+          <div className="result-file-icon"><Icon type="document" size={28} /></div>
+          <div className="result-file-copy">
+            <h4>분기별 실적보고서</h4>
+            <p>주소 미확인 건은 기존 규칙대로 타시도에 임시 분류하여 바로 집계할 수 있습니다.</p>
+          </div>
+          <button className="primary" disabled={quarterBusy} onClick={createQuarterReport}>
+            <Icon type="download" size={18} />{quarterBusy ? "분기보고서 생성 중..." : "분기보고서 다운로드"}
+          </button>
+        </article>
+
+        <article className="result-file-card review-file-card">
+          <div className="result-file-icon green"><Icon type="document" size={28} /></div>
+          <div className="result-file-copy">
+            <h4>반기 검토용 기초자료</h4>
+            <p>현재까지 확인된 주소만 반영하며, 미확인 주소가 있어도 공식 1-4 기초자료를 생성합니다.</p>
+          </div>
+          <button className="primary" disabled={reviewBusy} onClick={createReviewWorkbook}>
+            <Icon type="download" size={18} />{reviewBusy ? "검토용 Excel 생성 중..." : "검토용 Excel 다운로드"}
+          </button>
+        </article>
+      </div>
+
+      {reviewInfo && (
+        <div className={reviewInfo.unresolvedCount ? "alert warn" : "alert success"}>
+          검토용 파일 생성 완료 · 대상 {formatNumber(reviewInfo.recordCount)}건 · 주소 반영 {formatNumber(reviewInfo.filledCount)}건 · 주소 미확인 {formatNumber(reviewInfo.unresolvedCount)}건
+        </div>
+      )}
+    </>
+  );
+
   return (
     <>
       <section className="grid two streamlit-top-grid">
@@ -508,9 +547,11 @@ export default function PrepareWorkflow({ config }) {
             기관: <b>{result.institution || "자동 확인 실패"}</b> · 자동 감지 지역: <b>{result.auto_region}</b> · API 조회 후보: <b>{formatNumber(result.api_lookup_candidate_count)}개 업체</b> · 기준 금액: <b>{formatNumber(result.target_amount)}원</b>
           </div>
 
+          {resultFiles}
+
           <div className="workflow-section-head">
             <div className="workflow-pin"><Icon type="pin" size={32} /></div>
-            <div><h3>주소 보완</h3><p>저장된 주소와 공공 API를 활용해 자동으로 채운 뒤, 남은 업체만 직접 입력합니다.</p></div>
+            <div><h3>주소 보완 <span style={{fontSize: "14px", fontWeight: 700, color: "#6b7f98"}}>선택사항</span></h3><p>더 정확한 지역 분류가 필요하면 저장주소와 공공 API를 이용해 주소를 보완하세요.</p></div>
           </div>
 
           <div className="address-workflow-grid">
@@ -528,14 +569,14 @@ export default function PrepareWorkflow({ config }) {
               <div className="workflow-card-title"><span className="step-number">2</span><h3>저장주소 재사용</h3></div>
               <p>이전에 확인한 업체 주소와 Firestore 캐시를 자동으로 불러와 반복 조회를 줄입니다.</p>
               <div className="workflow-action green-action static"><Icon type="reuse" size={20} />자동 재사용</div>
-              <div className="workflow-stat">{addressResult ? <>이번 실행 재사용 <b>{formatNumber((addressResult.cache_hit_count || 0) + (addressResult.manual_hit_count || 0))}개</b></> : <>조회 후 재사용 건수를 표시합니다.</>}</div>
+              <div className="workflow-stat">{addressResult ? <>이번 실행 재사용 <b>{formatNumber((addressResult.cache_hit_count || 0) + (addressResult.manual_hit_count || 0))}개</b></> : <>주소 조회를 실행하면 재사용 건수를 표시합니다.</>}</div>
             </article>
 
             <article className="workflow-card orange-card">
               <div className="workflow-card-title"><span className="step-number">3</span><h3>남은 주소 직접 입력</h3></div>
               <p>자동 조회로 찾지 못한 업체만 직접 확인하고 주소를 저장해 다음 작업에 재사용합니다.</p>
               <div className="workflow-action orange-action static"><Icon type="pencil" size={20} />{addressResult ? `주소 미확인 ${formatNumber(unresolvedCandidates.length)}개` : "자동 조회 후 활성화"}</div>
-              <div className="workflow-stat">{addressResult ? <>직접 입력 필요 <b>{formatNumber(unresolvedCandidates.length)}개 업체</b></> : <>먼저 자동 주소 조회를 실행하세요.</>}</div>
+              <div className="workflow-stat">{addressResult ? <>직접 입력 필요 <b>{formatNumber(unresolvedCandidates.length)}개 업체</b></> : <>주소 보완이 필요할 때만 자동 조회를 실행하세요.</>}</div>
             </article>
           </div>
 
@@ -560,7 +601,7 @@ export default function PrepareWorkflow({ config }) {
               {unresolvedCandidates.length > 0 && (
                 <div className="manual-panel">
                   <div className="manual-head">
-                    <div><span className="step">STEP 04</span><h3>주소 미확인 업체 직접 보완</h3><p>입력 주소는 결과 파일에 반영되며, 사업자번호가 있으면 공유 저장할 수 있습니다.</p></div>
+                    <div><span className="step">OPTION</span><h3>주소 미확인 업체 직접 보완</h3><p>입력 주소는 이후 생성하는 결과 파일에 반영되며, 사업자번호가 있으면 공유 저장할 수 있습니다.</p></div>
                     <span className="manual-progress">입력 {enteredManualCount}/{unresolvedCandidates.length}</span>
                   </div>
                   <div className="manual-list">
@@ -581,41 +622,6 @@ export default function PrepareWorkflow({ config }) {
                       );
                     })}
                   </div>
-                </div>
-              )}
-
-              <div className="result-files-head">
-                <span className="step">STEP 05</span>
-                <h3>결과 파일 다운로드</h3>
-                <p>분기 제출용 실적보고서와 반기 검토용 기초자료를 각각 생성할 수 있습니다.</p>
-              </div>
-              <div className="result-files-grid">
-                <article className="result-file-card quarter-file-card">
-                  <div className="result-file-icon"><Icon type="document" size={28} /></div>
-                  <div className="result-file-copy">
-                    <h4>분기별 실적보고서</h4>
-                    <p>기존 분기 제출서식에 공사·용역·물품의 관내·충남관외·타시도 실적을 자동 집계합니다.</p>
-                  </div>
-                  <button className="primary" disabled={quarterBusy} onClick={createQuarterReport}>
-                    <Icon type="download" size={18} />{quarterBusy ? "분기보고서 생성 중..." : "분기보고서 다운로드"}
-                  </button>
-                </article>
-
-                <article className="result-file-card review-file-card">
-                  <div className="result-file-icon green"><Icon type="document" size={28} /></div>
-                  <div className="result-file-copy">
-                    <h4>반기 검토용 기초자료</h4>
-                    <p>확인된 주소를 반영한 공식 1-4 기초자료입니다. 검토·수정 후 최종작성 메뉴에서 다시 업로드합니다.</p>
-                  </div>
-                  <button className="primary" disabled={reviewBusy} onClick={createReviewWorkbook}>
-                    <Icon type="download" size={18} />{reviewBusy ? "검토용 Excel 생성 중..." : "검토용 Excel 다운로드"}
-                  </button>
-                </article>
-              </div>
-
-              {reviewInfo && (
-                <div className={reviewInfo.unresolvedCount ? "alert warn" : "alert success"}>
-                  검토용 파일 생성 완료 · 대상 {formatNumber(reviewInfo.recordCount)}건 · 주소 반영 {formatNumber(reviewInfo.filledCount)}건 · 주소 미확인 {formatNumber(reviewInfo.unresolvedCount)}건
                 </div>
               )}
             </>

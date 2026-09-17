@@ -17,27 +17,56 @@ class AddressServiceTests(unittest.TestCase):
         self.assertFalse(result["found"])
         self.assertTrue(result["invalid"])
 
-    def test_saved_manual_address_has_priority(self):
+    @patch.object(address_service, "get_local_franchise_address", return_value=None)
+    @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
+    @patch.object(address_service, "get_s2b_address", return_value=None)
+    @patch.object(address_service, "get_procurement_address", return_value=None)
+    def test_saved_manual_address_is_only_suggestion_after_public_sources_fail(self, *_):
         manual_store.save_manual_address(
             "123-45-67890",
             "충청남도 천안시 저장주소 10",
             "테스트업체",
         )
-        with patch.object(address_service, "get_procurement_address") as procurement:
-            result = address_service.lookup_address("1234567890")
+
+        result = address_service.lookup_address("1234567890", force_refresh=True)
+
+        self.assertFalse(result["found"])
+        self.assertFalse(result["manual_hit"])
+        self.assertTrue(result["manual_suggestion"])
+        self.assertEqual(result["saved_address"], "충청남도 천안시 저장주소 10")
+        self.assertEqual(result["saved_company_name"], "테스트업체")
+        self.assertEqual(result["address"], "")
+
+    @patch.object(address_service, "get_local_franchise_address", return_value=None)
+    @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
+    @patch.object(address_service, "get_s2b_address", return_value=None)
+    @patch.object(address_service, "get_procurement_address", return_value="충청남도 천안시 API주소 1")
+    def test_public_api_wins_over_saved_manual_address(self, procurement, *_):
+        manual_store.save_manual_address(
+            "123-45-67890",
+            "충청남도 천안시 사용자입력 99",
+            "테스트업체",
+        )
+
+        result = address_service.lookup_address("1234567890", force_refresh=True)
 
         self.assertTrue(result["found"])
-        self.assertTrue(result["manual_hit"])
-        self.assertEqual(result["source"], "사용자 저장주소")
-        self.assertEqual(result["address"], "충청남도 천안시 저장주소 10")
-        procurement.assert_not_called()
+        self.assertEqual(result["source"], "나라장터")
+        self.assertEqual(result["address"], "충청남도 천안시 API주소 1")
+        self.assertFalse(result["manual_suggestion"])
+        procurement.assert_called_once()
 
     @patch.object(address_service, "get_local_franchise_address", return_value=None)
     @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
     @patch.object(address_service, "get_s2b_address", return_value=None)
     @patch.object(address_service, "get_procurement_address", return_value="충청남도 천안시 테스트로 1")
-    def test_positive_result_is_cached(self, procurement, *_):
+    def test_positive_public_result_is_cached_and_reused(self, procurement, *_):
         first = address_service.lookup_address("123-45-67890")
+        manual_store.save_manual_address(
+            "1234567890",
+            "충청남도 천안시 사용자입력 99",
+            "테스트업체",
+        )
         second = address_service.lookup_address("1234567890")
 
         self.assertTrue(first["found"])
@@ -46,7 +75,9 @@ class AddressServiceTests(unittest.TestCase):
 
         self.assertTrue(second["found"])
         self.assertTrue(second["cache_hit"])
+        self.assertEqual(second["source"], "나라장터")
         self.assertEqual(second["address"], "충청남도 천안시 테스트로 1")
+        self.assertFalse(second["manual_suggestion"])
         self.assertEqual(procurement.call_count, 1)
 
     @patch.object(address_service, "get_local_franchise_address", return_value=None)
@@ -70,6 +101,9 @@ class AddressServiceTests(unittest.TestCase):
             "cache_layer": "",
             "cache_backend": "memory",
             "manual_hit": False,
+            "manual_suggestion": False,
+            "saved_address": "",
+            "saved_company_name": "",
             "invalid": False,
         }
 
@@ -80,6 +114,7 @@ class AddressServiceTests(unittest.TestCase):
         self.assertEqual(result["requested_count"], 3)
         self.assertEqual(result["unique_valid_count"], 2)
         self.assertEqual(result["found_count"], 2)
+        self.assertEqual(result["manual_suggestion_count"], 0)
 
 
 if __name__ == "__main__":

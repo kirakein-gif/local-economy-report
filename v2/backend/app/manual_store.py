@@ -1,6 +1,8 @@
+import json
 import os
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 from google.api_core.exceptions import AlreadyExists
@@ -10,6 +12,9 @@ from .excel_service import normalize_biz_no
 
 MANUAL_COLLECTION = os.getenv(
     "MANUAL_ADDRESS_COLLECTION", "local_economy_manual_addresses"
+).strip()
+LEGACY_MANUAL_FILE = os.getenv(
+    "LEGACY_MANUAL_ADDRESS_FILE", "/app/data/manual_addresses.json"
 ).strip()
 LEGACY_MANUAL_URL = os.getenv(
     "LEGACY_MANUAL_ADDRESS_URL",
@@ -83,7 +88,15 @@ def _clean_manual_record(biz_num, item):
 
 
 def _load_legacy_manual_addresses():
-    if not LEGACY_MIGRATION_ENABLED or not LEGACY_MANUAL_URL:
+    if not LEGACY_MIGRATION_ENABLED:
+        return {}
+
+    local_path = Path(LEGACY_MANUAL_FILE) if LEGACY_MANUAL_FILE else None
+    if local_path and local_path.exists():
+        payload = json.loads(local_path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+
+    if not LEGACY_MANUAL_URL:
         return {}
 
     response = requests.get(

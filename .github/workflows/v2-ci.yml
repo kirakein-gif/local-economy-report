@@ -8,6 +8,7 @@ on:
       - "v2/**"
       - "template_parts/**"
       - "legacy_quarter_app.py"
+      - "data/manual_addresses.json"
       - "Dockerfile"
       - ".dockerignore"
       - ".github/workflows/v2-ci.yml"
@@ -16,6 +17,7 @@ on:
       - "v2/**"
       - "template_parts/**"
       - "legacy_quarter_app.py"
+      - "data/manual_addresses.json"
       - "Dockerfile"
       - ".dockerignore"
       - ".github/workflows/v2-ci.yml"
@@ -68,3 +70,8 @@ jobs:
         run: >-
           docker run --rm local-economy-report-v2:ci
           python -c "from app.quarter_service import _load_quarter_template_bytes; data=_load_quarter_template_bytes(); assert data.startswith(b'PK\\x03\\x04'); print('quarter template ok', len(data))"
+
+      - name: Smoke test legacy manual address snapshot inside production image
+        run: >-
+          docker run --rm local-economy-report-v2:ci
+          python -c "import json; data=json.load(open('/app/data/manual_addresses.json', encoding='utf-8')); assert data['3120813966']['company_name']=='전진유리'; print('legacy manual address snapshot ok', len(data))"

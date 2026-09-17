@@ -20,14 +20,25 @@ def _load_quarter_template_bytes():
     candidates = []
     if configured:
         candidates.append(Path(configured))
-    candidates.extend([
-        Path("/app/legacy_quarter_app.py"),
-        Path(__file__).resolve().parents[3] / "legacy_quarter_app.py",
-    ])
+
+    # Production Cloud Run image location. Dockerfile copies the legacy source here.
+    candidates.append(Path("/app/legacy_quarter_app.py"))
+
+    # Local / GitHub Actions fallback. Walk parent directories safely instead of
+    # assuming a fixed depth; /app/app/quarter_service.py has fewer parents than
+    # the repository checkout path used by CI.
+    current_file = Path(__file__).resolve()
+    for parent in current_file.parents:
+        candidate = parent / "legacy_quarter_app.py"
+        if candidate not in candidates:
+            candidates.append(candidate)
 
     source_path = next((path for path in candidates if path.exists()), None)
     if source_path is None:
-        raise FileNotFoundError("기존 분기보고서 템플릿 소스를 찾을 수 없습니다.")
+        checked = ", ".join(str(path) for path in candidates)
+        raise FileNotFoundError(
+            f"기존 분기보고서 템플릿 소스를 찾을 수 없습니다. 확인 경로: {checked}"
+        )
 
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source)

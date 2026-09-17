@@ -102,12 +102,31 @@ export default function PrepareWorkflow({ config }) {
     return map;
   }, [addressResult]);
 
+  const savedSuggestionByBiz = useMemo(() => {
+    const map = {};
+    for (const item of addressResult?.results || []) {
+      if (item.manual_suggestion && item.biz_no && item.saved_address) {
+        map[item.biz_no] = {
+          address: item.saved_address,
+          company: item.saved_company_name || "",
+        };
+      }
+    }
+    return map;
+  }, [addressResult]);
+
   const unresolvedCandidates = useMemo(() => {
-    return (result?.manual_candidates || []).filter((candidate) => {
-      if (!candidate.biz_no) return true;
-      return !foundByBiz[candidate.biz_no];
-    });
-  }, [result, foundByBiz]);
+    return (result?.manual_candidates || [])
+      .filter((candidate) => {
+        if (!candidate.biz_no) return true;
+        return !foundByBiz[candidate.biz_no];
+      })
+      .map((candidate) => ({
+        ...candidate,
+        saved_address: candidate.biz_no ? (savedSuggestionByBiz[candidate.biz_no]?.address || "") : "",
+        saved_company_name: candidate.biz_no ? (savedSuggestionByBiz[candidate.biz_no]?.company || "") : "",
+      }));
+  }, [result, foundByBiz, savedSuggestionByBiz]);
 
   const enteredManualCount = unresolvedCandidates.filter((item) =>
     String(manualAddresses[item.lookup_key] || "").trim()
@@ -248,7 +267,9 @@ export default function PrepareWorkflow({ config }) {
       setAddressResult({
         found_count: 0,
         cache_hit_count: 0,
+        negative_cache_hit_count: 0,
         manual_hit_count: 0,
+        manual_suggestion_count: 0,
         source_counts: {},
         results: [],
       });
@@ -551,13 +572,13 @@ export default function PrepareWorkflow({ config }) {
 
           <div className="workflow-section-head">
             <div className="workflow-pin"><Icon type="pin" size={32} /></div>
-            <div><h3>주소 보완 <span style={{fontSize: "14px", fontWeight: 700, color: "#6b7f98"}}>선택사항</span></h3><p>더 정확한 지역 분류가 필요하면 저장주소와 공공 API를 이용해 주소를 보완하세요.</p></div>
+            <div><h3>주소 보완 <span style={{fontSize: "14px", fontWeight: 700, color: "#6b7f98"}}>선택사항</span></h3><p>공공 API와 공공 API 캐시를 우선 사용하고, 사람이 저장한 주소는 확인 후에만 적용합니다.</p></div>
           </div>
 
           <div className="address-workflow-grid">
             <article className="workflow-card blue-card">
               <div className="workflow-card-title"><span className="step-number">1</span><h3>자동 주소 조회</h3></div>
-              <p>저장주소를 먼저 확인하고 나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 조회합니다.</p>
+              <p>공공 API 캐시를 먼저 확인하고 나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 조회합니다.</p>
               <button className="workflow-action blue-action" disabled={addressBusy || !!addressResult} onClick={lookupAddresses}>
                 <Icon type="search" size={20} />
                 {addressBusy ? "주소 조회 중..." : addressResult ? "주소 조회 완료" : `주소 조회 시작 · ${formatNumber(result.api_lookup_candidate_count)}개 업체`}
@@ -566,17 +587,17 @@ export default function PrepareWorkflow({ config }) {
             </article>
 
             <article className="workflow-card green-card">
-              <div className="workflow-card-title"><span className="step-number">2</span><h3>저장주소 재사용</h3></div>
-              <p>이전에 확인한 업체 주소와 Firestore 캐시를 자동으로 불러와 반복 조회를 줄입니다.</p>
-              <div className="workflow-action green-action static"><Icon type="reuse" size={20} />자동 재사용</div>
-              <div className="workflow-stat">{addressResult ? <>이번 실행 재사용 <b>{formatNumber((addressResult.cache_hit_count || 0) + (addressResult.manual_hit_count || 0))}개</b></> : <>주소 조회를 실행하면 재사용 건수를 표시합니다.</>}</div>
+              <div className="workflow-card-title"><span className="step-number">2</span><h3>신뢰도별 재사용</h3></div>
+              <p>공공 API에서 확인된 캐시는 자동 재사용하고, 사용자 저장주소는 API 실패 시 후보로만 보여줍니다.</p>
+              <div className="workflow-action green-action static"><Icon type="reuse" size={20} />API 캐시 자동 · 저장주소 확인</div>
+              <div className="workflow-stat">{addressResult ? <>API 캐시 <b>{formatNumber(addressResult.cache_hit_count)}개</b> · 저장주소 후보 <b>{formatNumber(addressResult.manual_suggestion_count)}개</b></> : <>주소 조회 후 출처별로 구분해 표시합니다.</>}</div>
             </article>
 
             <article className="workflow-card orange-card">
-              <div className="workflow-card-title"><span className="step-number">3</span><h3>남은 주소 직접 입력</h3></div>
-              <p>자동 조회로 찾지 못한 업체만 직접 확인하고 주소를 저장해 다음 작업에 재사용합니다.</p>
+              <div className="workflow-card-title"><span className="step-number">3</span><h3>남은 주소 확인·입력</h3></div>
+              <p>API에서 찾지 못한 업체는 이전 저장주소를 확인해 적용하거나 새 주소를 직접 입력할 수 있습니다.</p>
               <div className="workflow-action orange-action static"><Icon type="pencil" size={20} />{addressResult ? `주소 미확인 ${formatNumber(unresolvedCandidates.length)}개` : "자동 조회 후 활성화"}</div>
-              <div className="workflow-stat">{addressResult ? <>직접 입력 필요 <b>{formatNumber(unresolvedCandidates.length)}개 업체</b></> : <>주소 보완이 필요할 때만 자동 조회를 실행하세요.</>}</div>
+              <div className="workflow-stat">{addressResult ? <>확인 필요 <b>{formatNumber(unresolvedCandidates.length)}개 업체</b></> : <>주소 보완이 필요할 때만 자동 조회를 실행하세요.</>}</div>
             </article>
           </div>
 
@@ -584,24 +605,24 @@ export default function PrepareWorkflow({ config }) {
             <>
               <div className="address-result">
                 <div className="address-summary">
-                  <div><span>주소 확인</span><strong>{formatNumber(addressResult.found_count)}개</strong></div>
+                  <div><span>API 주소 확인</span><strong>{formatNumber(addressResult.found_count)}개</strong></div>
                   <div><span>미확인</span><strong>{formatNumber(unresolvedCandidates.length)}개</strong></div>
-                  <div><span>캐시 재사용</span><strong>{formatNumber(addressResult.cache_hit_count)}개</strong></div>
-                  <div><span>저장주소 재사용</span><strong>{formatNumber(addressResult.manual_hit_count)}개</strong></div>
+                  <div><span>API 캐시 재사용</span><strong>{formatNumber(addressResult.cache_hit_count)}개</strong></div>
+                  <div><span>사용자 저장주소 후보</span><strong>{formatNumber(addressResult.manual_suggestion_count)}개</strong></div>
                 </div>
                 <div className="source-line">
-                  저장주소 <b>{formatNumber(addressResult.source_counts?.["사용자 저장주소"])}</b><span>·</span>
                   나라장터 <b>{formatNumber(addressResult.source_counts?.["나라장터"])}</b><span>·</span>
                   학교장터 <b>{formatNumber(addressResult.source_counts?.["학교장터(S2B)"])}</b><span>·</span>
                   공정위 <b>{formatNumber(addressResult.source_counts?.["공정위 통신판매사업자"])}</b><span>·</span>
-                  지역화폐 <b>{formatNumber(addressResult.source_counts?.["지역화폐 가맹점"])}</b>
+                  지역화폐 <b>{formatNumber(addressResult.source_counts?.["지역화폐 가맹점"])}</b><span>·</span>
+                  사용자 저장주소 후보 <b>{formatNumber(addressResult.manual_suggestion_count)}</b>
                 </div>
               </div>
 
               {unresolvedCandidates.length > 0 && (
                 <div className="manual-panel">
                   <div className="manual-head">
-                    <div><span className="step">OPTION</span><h3>주소 미확인 업체 직접 보완</h3><p>입력 주소는 이후 생성하는 결과 파일에 반영되며, 사업자번호가 있으면 공유 저장할 수 있습니다.</p></div>
+                    <div><span className="step">OPTION</span><h3>주소 미확인 업체 직접 보완</h3><p>이전 사용자 저장주소는 자동 적용되지 않습니다. 내용을 확인한 뒤 적용하거나 새 주소를 입력하세요.</p></div>
                     <span className="manual-progress">입력 {enteredManualCount}/{unresolvedCandidates.length}</span>
                   </div>
                   <div className="manual-list">
@@ -611,7 +632,15 @@ export default function PrepareWorkflow({ config }) {
                       return (
                         <div className="manual-row" key={candidate.lookup_key}>
                           <div className="company-cell"><strong>{candidate.company || "업체명 확인불가"}</strong><span>{candidate.biz_no || "사업자번호 확인불가"}</span></div>
-                          <input className="address-input" value={value} placeholder="확인한 업체 주소를 입력하세요" onChange={(event) => { setManualAddresses((current) => ({ ...current, [candidate.lookup_key]: event.target.value })); setReviewInfo(null); }} />
+                          <div className="address-entry-cell">
+                            {candidate.saved_address && (
+                              <div className="saved-address-suggestion">
+                                <div><span>이전 사용자 저장주소</span><strong>{candidate.saved_address}</strong></div>
+                                <button type="button" onClick={() => { setManualAddresses((current) => ({ ...current, [candidate.lookup_key]: candidate.saved_address })); setReviewInfo(null); }}>확인 후 적용</button>
+                              </div>
+                            )}
+                            <input className="address-input" value={value} placeholder={candidate.saved_address ? "저장주소를 확인하거나 새 주소를 입력하세요" : "확인한 업체 주소를 입력하세요"} onChange={(event) => { setManualAddresses((current) => ({ ...current, [candidate.lookup_key]: event.target.value })); setReviewInfo(null); }} />
+                          </div>
                           <div className="manual-buttons">
                             {candidate.biz_no && <a className="secondary-link" href={`https://bizno.net/?query=${encodeURIComponent(candidate.biz_no)}`} target="_blank" rel="noreferrer">업체조회</a>}
                             <button className="secondary" disabled={!candidate.biz_no || !String(value).trim() || status === "saving"} onClick={() => saveManual(candidate)}>

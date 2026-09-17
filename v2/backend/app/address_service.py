@@ -17,6 +17,12 @@ LOCAL_FRANCHISE_URL = "https://apis.data.go.kr/B190001/localFranchisesV3/franchi
 
 MAX_BULK_BUSINESSES = 200
 DEFAULT_WORKERS = 2
+PUBLIC_SOURCE_NAMES = {
+    "나라장터",
+    "학교장터(S2B)",
+    "공정위 통신판매사업자",
+    "지역화폐 가맹점",
+}
 
 
 def _clean(value):
@@ -220,10 +226,31 @@ def _base_result(biz, **extra):
         "cache_layer": "",
         "cache_backend": address_cache.active_backend,
         "manual_hit": False,
+        "manual_suggestion": False,
+        "saved_address": "",
+        "saved_company_name": "",
         "invalid": False,
     }
     result.update(extra)
     return result
+
+
+def _manual_suggestion(biz, *, cache_hit=False, cache_layer=""):
+    manual = get_manual_address(biz)
+    if not manual:
+        return _base_result(
+            biz,
+            cache_hit=cache_hit,
+            cache_layer=cache_layer,
+        )
+    return _base_result(
+        biz,
+        cache_hit=cache_hit,
+        cache_layer=cache_layer,
+        manual_suggestion=True,
+        saved_address=manual.get("address", ""),
+        saved_company_name=manual.get("company_name", ""),
+    )
 
 
 def lookup_address(biz_num, force_refresh=False):
@@ -231,28 +258,33 @@ def lookup_address(biz_num, force_refresh=False):
     if not biz:
         return _base_result("", invalid=True)
 
-    manual = get_manual_address(biz)
-    if manual:
-        return _base_result(
-            biz,
-            address=manual.get("address", ""),
-            source="사용자 저장주소",
-            found=True,
-            manual_hit=True,
-            cache_layer=manual.get("backend", ""),
-        )
-
+    # Public API results cached from earlier runs are trusted and can be reused.
+    # User-entered addresses are intentionally NOT treated as authoritative cache.
     if not force_refresh:
         cached = address_cache.get(biz)
         if cached is not None:
-            return _base_result(
-                biz,
-                address=cached.get("address", ""),
-                source=cached.get("source", ""),
-                found=bool(cached.get("found")),
-                cache_hit=True,
-                cache_layer=cached.get("cache_layer", ""),
-            )
+            cached_source = str(cached.get("source", "") or "")
+            cached_found = bool(cached.get("found"))
+            cache_layer = cached.get("cache_layer", "")
+
+            if cached_found and cached_source in PUBLIC_SOURCE_NAMES:
+                return _base_result(
+                    biz,
+                    address=cached.get("address", ""),
+                    source=cached_source,
+                    found=True,
+                    cache_hit=True,
+                    cache_layer=cache_layer,
+                )
+
+            # A recent negative API lookup can be reused to avoid repeating API calls.
+            # If a user-entered address exists, expose it only as a suggestion.
+            if not cached_found:
+                return _manual_suggestion(
+                    biz,
+                    cache_hit=True,
+                    cache_layer=cache_layer,
+                )
 
     sources = [
         ("나라장터", get_procurement_address),
@@ -285,7 +317,10 @@ def lookup_address(biz_num, force_refresh=False):
         found=False,
         ttl_seconds=DEFAULT_NEGATIVE_TTL,
     )
-    return _base_result(biz)
+
+    # Only after public sources fail do we expose a human-entered saved address.
+    # It remains unconfirmed until the user explicitly applies it in the UI.
+    return _manual_suggestion(biz)
 
 
 def bulk_lookup_addresses(biz_numbers, force_refresh=False):
@@ -328,7 +363,6 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
 
     results = [results_by_biz[biz] for biz in normalized]
     source_counts = {
-        "사용자 저장주소": 0,
         "나라장터": 0,
         "학교장터(S2B)": 0,
         "공정위 통신판매사업자": 0,
@@ -345,8 +379,16 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
         "invalid_count": len(invalid),
         "found_count": sum(1 for item in results if item.get("found")),
         "not_found_count": sum(1 for item in results if not item.get("found")),
-        "cache_hit_count": sum(1 for item in results if item.get("cache_hit")),
-        "manual_hit_count": sum(1 for item in results if item.get("manual_hit")),
+        "cache_hit_count": sum(
+            1 for item in results if item.get("cache_hit") and item.get("found")
+        ),
+        "negative_cache_hit_count": sum(
+            1 for item in results if item.get("cache_hit") and not item.get("found")
+        ),
+        "manual_hit_count": 0,
+        "manual_suggestion_count": sum(
+            1 for item in results if item.get("manual_suggestion")
+        ),
         "source_counts": source_counts,
         "cache": address_cache.status(),
         "results": results,

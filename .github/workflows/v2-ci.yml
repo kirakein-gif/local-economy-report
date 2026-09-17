@@ -7,6 +7,7 @@ on:
     paths:
       - "v2/**"
       - "template_parts/**"
+      - "legacy_quarter_app.py"
       - "Dockerfile"
       - ".dockerignore"
       - ".github/workflows/v2-ci.yml"
@@ -14,6 +15,7 @@ on:
     paths:
       - "v2/**"
       - "template_parts/**"
+      - "legacy_quarter_app.py"
       - "Dockerfile"
       - ".dockerignore"
       - ".github/workflows/v2-ci.yml"
@@ -61,3 +63,8 @@ jobs:
 
       - name: Build production Docker image
         run: docker build -t local-economy-report-v2:ci .
+
+      - name: Smoke test quarterly template inside production image
+        run: >-
+          docker run --rm local-economy-report-v2:ci
+          python -c "from app.quarter_service import _load_quarter_template_bytes; data=_load_quarter_template_bytes(); assert data.startswith(b'PK\\x03\\x04'); print('quarter template ok', len(data))"

@@ -1,0 +1,14 @@
+.git
+.github
+.devcontainer
+.streamlit
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.venv
+venv
+node_modules
+v2/frontend/node_modules
+v2/frontend/dist

@@ -8,7 +8,7 @@ from app.quarter_service import build_quarter_report
 
 
 class QuarterServiceTests(unittest.TestCase):
-    def _source_workbook_bytes(self):
+    def _source_workbook_bytes(self, include_blank_address=False):
         headers = [f"열{i + 1}" for i in range(21)]
         headers[1] = "목적물"
         headers[2] = "계약방법"
@@ -22,11 +22,15 @@ class QuarterServiceTests(unittest.TestCase):
         headers[20] = "주소"
 
         rows = []
-        for ctype, amount, biz, address in [
+        source_rows = [
             ("공사", 700000, "111-11-11111", "충청남도 천안시 테스트로 1"),
             ("용역", 800000, "222-22-22222", "충청남도 아산시 테스트로 2"),
             ("물품", 900000, "333-33-33333", "서울특별시 테스트로 3"),
-        ]:
+        ]
+        if include_blank_address:
+            source_rows.append(("물품", 600000, "444-44-44444", ""))
+
+        for ctype, amount, biz, address in source_rows:
             row = [""] * 21
             row[1] = ctype
             row[2] = "수의계약"
@@ -61,6 +65,21 @@ class QuarterServiceTests(unittest.TestCase):
         self.assertEqual(sheet["G6"].value, 800000)
         self.assertEqual(sheet["L5"].value, 1)
         self.assertEqual(sheet["L6"].value, 900000)
+
+    def test_quarter_report_still_downloads_with_blank_address(self):
+        result = build_quarter_report(
+            [self._source_workbook_bytes(include_blank_address=True)],
+            target_amount=500000,
+            target_region="천안",
+        )
+        self.assertEqual(result["record_count"], 4)
+        self.assertEqual(result["total_amount"], 3000000)
+
+        workbook = load_workbook(BytesIO(result["bytes"]))
+        sheet = workbook.active
+        # 주소 미확인 건은 기존 규칙대로 타시도에 임시 분류되어 보고서 생성은 계속됩니다.
+        self.assertEqual(sheet["L5"].value, 2)
+        self.assertEqual(sheet["L6"].value, 1500000)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,14 +16,15 @@ from .address_service import (
     get_api_key,
     lookup_address,
 )
+from .backup_service import backup_manual_addresses, backup_status
 from .cache import address_cache
 from .excel_service import CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, inspect_workbooks
 from .manual_store import backend_name as manual_backend_name
-from .manual_store import save_manual_address
+from .manual_store import migrate_legacy_manual_addresses, migration_status, save_manual_address
 from .quarter_service import build_quarter_report
 from .report_service import build_final_halfyear_report, build_review_workbook
 
-APP_VERSION = "2.0.0-alpha.5"
+APP_VERSION = "2.0.0-alpha.6"
 MAX_FILES = 20
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TOTAL_BYTES = 120 * 1024 * 1024
@@ -67,6 +68,13 @@ app.add_middleware(
         "X-Purpose-Correction-Count",
     ],
 )
+
+
+@app.on_event("startup")
+def startup_tasks():
+    migration = migrate_legacy_manual_addresses()
+    if migration.get("created_count", 0) > 0:
+        backup_manual_addresses(force=True)
 
 
 async def _read_upload_payloads(files):
@@ -125,12 +133,17 @@ def health():
         "version": APP_VERSION,
         "address_cache": address_cache.status(),
         "manual_address_backend": manual_backend_name(),
+        "manual_address_migration": migration_status(),
+        "manual_address_backup": backup_status(),
         "public_data_api_configured": bool(get_api_key()),
     }
 
 
 @app.get("/api/config")
-def config():
+def config(background_tasks: BackgroundTasks):
+    # Safety backup: at most once per day while the service is being used.
+    # Manual saves also trigger an immediate backup attempt.
+    background_tasks.add_task(backup_manual_addresses, False)
     return {
         "regions": CHUNGNAM_REGIONS,
         "default_target_amount": DEFAULT_TARGET_AMOUNT,
@@ -138,6 +151,8 @@ def config():
         "max_bulk_businesses": MAX_BULK_BUSINESSES,
         "address_cache": address_cache.status(),
         "manual_address_backend": manual_backend_name(),
+        "manual_address_migration": migration_status(),
+        "manual_address_backup": backup_status(),
         "public_data_api_configured": bool(get_api_key()),
         "default_report": {
             "year": 2026,
@@ -171,13 +186,16 @@ def address_bulk_lookup(payload: AddressBulkLookupRequest):
 
 
 @app.post("/api/manual/save")
-def manual_address_save(payload: ManualAddressSaveRequest):
+def manual_address_save(payload: ManualAddressSaveRequest, background_tasks: BackgroundTasks):
     try:
-        return save_manual_address(
+        result = save_manual_address(
             payload.biz_no,
             payload.address,
             payload.company_name,
         )
+        if result.get("backend") == "firestore":
+            background_tasks.add_task(backup_manual_addresses, True)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -45,6 +45,8 @@ export default function App() {
           </button>
         </section>
 
+        <div id="side-workflow-slot" />
+
         <div className="sidebar-spacer" />
 
         <div className="sidebar-meta">

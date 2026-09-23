@@ -15,60 +15,50 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const cacheName = config?.address_cache?.active === "firestore"
-    ? "Firestore 공유 캐시"
-    : "메모리 캐시";
-  const manualStoreName = config?.manual_address_backend === "firestore"
-    ? "수동주소 공유 저장"
-    : "수동주소 로컬 저장";
-
   const isPrepare = mode === "prepare";
+  const version = config?.version || "2.0";
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <img className="brand-icon" src={PROGRAM_ICON} alt="" />
-          <div>
-            <strong>지역경제활성화</strong>
-            <span>실적 자동 집계</span>
-          </div>
-        </div>
-
-        <div className="side-label">업무 메뉴</div>
-        <button
-          className={isPrepare ? "nav-button active" : "nav-button"}
-          onClick={() => setMode("prepare")}
-        >
-          <span>01</span>
-          자료 집계 · 검토파일
-        </button>
-        <button
-          className={!isPrepare ? "nav-button active" : "nav-button"}
-          onClick={() => setMode("final")}
-        >
-          <span>02</span>
-          반기보고서 최종작성
-        </button>
+        <section className="side-card stage-card">
+          <div className="side-title">업무 메뉴</div>
+          <button
+            className={isPrepare ? "side-step active" : "side-step"}
+            onClick={() => setMode("prepare")}
+          >
+            <span>1</span>
+            <div>
+              <b>자료 집계 · 검토파일</b>
+              <small>분기보고서 · 반기 기초자료</small>
+            </div>
+          </button>
+          <button
+            className={!isPrepare ? "side-step active" : "side-step"}
+            onClick={() => setMode("final")}
+          >
+            <span>2</span>
+            <div>
+              <b>반기보고서 최종작성</b>
+              <small>검토파일 → 공식 4시트</small>
+            </div>
+          </button>
+        </section>
 
         <div className="sidebar-spacer" />
-        <div className="developer-note">
-          <b>천안버들유치원 · 나대현</b>
-          <span>지역경제활성화 실적 자동 집계</span>
-        </div>
-        <div className="side-note">
-          <b>Cloud Run 운영 상태</b>
-          <span>{cacheName}</span>
-          <span>{manualStoreName}</span>
+
+        <div className="sidebar-meta">
+          <strong>v{version}</strong>
+          <span>제작자: 천안버들유치원 나대현</span>
         </div>
       </aside>
 
       <main className="main">
         <section className="hero">
           <div className="hero-brand-row">
-            <img className="hero-program-icon" src={PROGRAM_ICON} alt="" />
+            <img className="hero-program-icon" src={PROGRAM_ICON} alt="" aria-hidden="true" />
             <div className="hero-copy">
-              <div className="eyebrow">CHUNGNAM · LOCAL ECONOMY</div>
+              <div className="eyebrow">LOCAL ECONOMY REPORT</div>
               <h1>
                 {isPrepare
                   ? "지역경제활성화 실적 자동 집계"
@@ -76,14 +66,10 @@ export default function App() {
               </h1>
               <p>
                 {isPrepare
-                  ? "계약자료를 업로드하면 주소를 자동 조회·보완하고 검토용 기초자료까지 생성합니다."
-                  : "검토가 끝난 기초자료를 업로드해 공식 1-1~1-4 최종 보고서를 생성합니다."}
+                  ? "계약자료를 분석해 분기보고서와 반기 검토자료를 빠르게 작성합니다."
+                  : "검토가 끝난 기초자료로 공식 1-1~1-4 보고서를 생성합니다."}
               </p>
             </div>
-          </div>
-          <div className="hero-status">
-            <span className="status-dot" />
-            Cloud Run 자동확장
           </div>
         </section>
 

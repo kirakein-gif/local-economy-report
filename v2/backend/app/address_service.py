@@ -8,7 +8,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
-from .cache import DEFAULT_NEGATIVE_TTL, DEFAULT_POSITIVE_TTL, address_cache
+from .cache import (
+    DEFAULT_NEGATIVE_TTL,
+    DEFAULT_POSITIVE_TTL,
+    REVALIDATION_MAX_STALE_SECONDS,
+    address_cache,
+)
 from .excel_service import normalize_biz_no
 from .manual_store import get_manual_address, get_manual_addresses
 
@@ -319,11 +324,17 @@ def _lookup_public_sources(
 
     previous_source = str((previous_cache or {}).get("source", "") or "")
     previous_address = str((previous_cache or {}).get("address", "") or "").strip()
+    first_failed_at = int((previous_cache or {}).get("revalidation_first_failed_at", 0) or 0)
+    stale_grace_available = (
+        not first_failed_at
+        or int(time.time()) - first_failed_at < REVALIDATION_MAX_STALE_SECONDS
+    )
     if (
         previous_cache
         and bool(previous_cache.get("found"))
         and previous_address
         and previous_source in PUBLIC_SOURCE_NAMES
+        and stale_grace_available
     ):
         kept = address_cache.keep_stale_after_failed_revalidation(
             biz,

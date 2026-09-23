@@ -106,7 +106,7 @@ export default function FinalReport() {
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       setInfo({
         recordCount: Number(response.headers.get("X-Record-Count") || 0),
@@ -122,76 +122,85 @@ export default function FinalReport() {
 
   return (
     <section className="final-workflow">
-      <article className="card final-upload-card">
-        <div className="card-head">
-          <div>
-            <span className="step">FINAL · STEP 01</span>
-            <h2>검토 완료 파일 업로드</h2>
+      <div className="workspace-status">
+        검토가 끝난 1-4 기초자료 Excel을 선택하면 공식 4시트 보고서를 생성할 수 있습니다.
+      </div>
+
+      <div className="final-work-grid">
+        <article className="card final-upload-card compact-final-card">
+          <div className="compact-card-heading">
+            <span className="step">STEP 01</span>
+            <h2>1. 검토파일 선택</h2>
+            <p>앞 단계에서 내려받아 확인·수정한 검토용 Excel을 사용합니다.</p>
           </div>
-          <div className="icon-box">✓</div>
-        </div>
 
-        <p className="final-guide">
-          앞 단계에서 내려받은 <b>1-4 기초자료</b>를 확인·수정한 뒤 업로드하세요.
-          사용자가 Excel에서 수정한 주소, 소재지, 구입목적 등의 값을 최종값으로 사용합니다.
-        </p>
+          <label
+            className={dragActive ? "dropzone final-dropzone compact-dropzone dragging" : "dropzone final-dropzone compact-dropzone"}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(event) => {
+                applyFile(event.target.files?.[0] || null);
+                event.target.value = "";
+              }}
+            />
+            <strong>{file ? file.name : "검토 완료 Excel을 여기에 놓거나 클릭"}</strong>
+            <span>{file ? "클릭하거나 다른 파일을 놓으면 교체됩니다." : "1-4 기초자료가 포함된 검토용 파일"}</span>
+          </label>
 
-        <label
-          className={dragActive ? "dropzone final-dropzone dragging" : "dropzone final-dropzone"}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(event) => {
-              applyFile(event.target.files?.[0] || null);
-              event.target.value = "";
-            }}
-          />
-          <strong>{file ? file.name : "검토 완료 Excel 파일을 선택하거나 끌어 놓으세요"}</strong>
-          <span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 클릭하거나 다른 파일을 끌어 놓으면 교체됩니다.` : "1-4 기초자료가 포함된 검토용 파일"}</span>
-        </label>
-      </article>
-
-      <article className="final-process-card">
-        <div className="final-process-head">
-          <div>
-            <span className="step">FINAL · STEP 02</span>
-            <h2>최종 4시트 보고서 생성</h2>
+          <div className="final-file-note">
+            {file
+              ? <>선택 파일 <b>{file.name}</b><span>{(file.size / 1024 / 1024).toFixed(2)} MB</span></>
+              : <>사용자가 수정한 주소·소재지·구입목적 값을 최종값으로 사용합니다.</>}
           </div>
-          <button className="primary" disabled={busy || !file} onClick={createFinalReport}>
+        </article>
+
+        <aside className="card final-result-card">
+          <div className="result-head">
+            <div>
+              <p className="result-kicker">FINAL RESULT</p>
+              <h2>최종 4시트 보고서</h2>
+            </div>
+            <span className={file ? "result-state done" : "result-state"}>
+              {file ? "생성 가능" : "파일 대기"}
+            </span>
+          </div>
+
+          <div className="hint result-guide">
+            검토파일의 수정값을 반영하고, 필요한 항목만 보고 기준에 맞게 자동 보정합니다.
+          </div>
+
+          <div className="final-sheet-grid">
+            <div><b>1-1</b><span>총괄 · 공사</span></div>
+            <div><b>1-2</b><span>총괄 · 용역</span></div>
+            <div><b>1-3</b><span>총괄 · 물품</span></div>
+            <div><b>1-4</b><span>확정 기초자료</span></div>
+          </div>
+
+          <div className="final-compact-checks">
+            <span>✓ 수정한 검토값을 최종값으로 사용</span>
+            <span>✓ 잘못된 소재지는 주소 기준으로 보정</span>
+            <span>✓ 물품 구입목적의 빈 값·비정상 값 보정</span>
+          </div>
+
+          <button className="primary final-download-button" disabled={busy || !file} onClick={createFinalReport}>
             {busy ? "최종 보고서 생성 중..." : "최종 보고서 다운로드"}
           </button>
-        </div>
 
-        <div className="sheet-flow">
-          <div><b>1-1</b><span>총괄 + 공사</span></div>
-          <em>→</em>
-          <div><b>1-2</b><span>총괄 + 용역</span></div>
-          <em>→</em>
-          <div><b>1-3</b><span>총괄 + 물품</span></div>
-          <em>→</em>
-          <div><b>1-4</b><span>확정 기초자료</span></div>
-        </div>
-
-        <div className="final-checks">
-          <span>✓ 사용자가 수정한 검토파일 값을 최종값으로 사용</span>
-          <span>✓ 소재지 값이 잘못된 경우 주소를 기준으로 자동 보정</span>
-          <span>✓ 물품 구입목적의 빈 값·비정상 값은 보고 기준에 맞게 보정</span>
-          <span>✓ 공식 반기보고서 서식의 4개 시트를 그대로 생성</span>
-        </div>
-      </article>
+          {info && (
+            <div className="alert success compact-final-alert">
+              생성 완료 · 기초자료 {formatNumber(info.recordCount)}건 · 소재지 보정 {formatNumber(info.correctedLocationCount)}건 · 구입목적 보정 {formatNumber(info.purposeCorrectionCount)}건
+            </div>
+          )}
+        </aside>
+      </div>
 
       {error && <div className="alert error">{error}</div>}
-
-      {info && (
-        <div className="alert success">
-          최종 보고서 생성 완료 · 기초자료 {formatNumber(info.recordCount)}건 · 소재지 자동 보정 {formatNumber(info.correctedLocationCount)}건 · 구입목적 보정 {formatNumber(info.purposeCorrectionCount)}건
-        </div>
-      )}
     </section>
   );
 }

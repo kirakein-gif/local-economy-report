@@ -1,14 +1,18 @@
 import json
+import queue
+import threading
+import time
 from datetime import date
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from .address_service import (
     MAX_BULK_BUSINESSES,
@@ -16,15 +20,23 @@ from .address_service import (
     get_api_key,
     lookup_address,
 )
-from .backup_service import backup_manual_addresses, backup_status
 from .cache import address_cache
-from .excel_service import CHUNGNAM_REGIONS, DEFAULT_TARGET_AMOUNT, inspect_workbooks
+from .excel_service import (
+    CHUNGNAM_REGIONS,
+    DEFAULT_TARGET_AMOUNT,
+    combine_workbooks,
+    inspect_source,
+    inspect_workbooks,
+)
 from .manual_store import backend_name as manual_backend_name
 from .manual_store import migrate_legacy_manual_addresses, migration_status, save_manual_address
-from .quarter_service import build_quarter_report
-from .report_service import build_final_halfyear_report, build_review_workbook
+from .quarter_service import build_quarter_report_from_source
+from .report_service import (
+    build_final_halfyear_report,
+    build_review_workbook_from_source,
+)
 
-APP_VERSION = "2.0.0-alpha.6"
+APP_VERSION = "2.0.0-alpha.7"
 MAX_FILES = 20
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TOTAL_BYTES = 120 * 1024 * 1024
@@ -59,6 +71,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[
         "Content-Disposition",
+        "Server-Timing",
         "X-Record-Count",
         "X-Filled-Address-Count",
         "X-Unresolved-Address-Count",
@@ -72,9 +85,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_tasks():
-    migration = migrate_legacy_manual_addresses()
-    if migration.get("created_count", 0) > 0:
-        backup_manual_addresses(force=True)
+    # Safe one-time migration. After completion, future cold starts only read one marker doc.
+    migrate_legacy_manual_addresses()
 
 
 async def _read_upload_payloads(files):
@@ -125,6 +137,77 @@ def _parse_address_overrides(address_overrides_json):
     return business_addresses, row_addresses
 
 
+def _quarter_sync(
+    payloads,
+    target_amount,
+    region_mode,
+    manual_region,
+    address_overrides_json,
+):
+    started = time.perf_counter()
+    business_addresses, row_addresses = _parse_address_overrides(address_overrides_json)
+    df, headers = combine_workbooks(payloads)
+    inspection = inspect_source(
+        df,
+        headers,
+        file_count=len(payloads),
+        target_amount=target_amount,
+        manual_region=manual_region if region_mode == "manual" else "",
+    )
+    target_region = inspection["target_region"]
+    result = build_quarter_report_from_source(
+        df,
+        headers,
+        target_amount=target_amount,
+        target_region=target_region,
+        business_addresses=business_addresses,
+        row_addresses=row_addresses,
+    )
+    return target_region, result, (time.perf_counter() - started) * 1000
+
+
+def _review_sync(
+    payloads,
+    target_amount,
+    region_mode,
+    manual_region,
+    address_overrides_json,
+    report_year,
+    report_label,
+    start_date,
+    end_date,
+):
+    started = time.perf_counter()
+    business_addresses, row_addresses = _parse_address_overrides(address_overrides_json)
+    report_start = date.fromisoformat(start_date)
+    report_end = date.fromisoformat(end_date)
+    if report_end < report_start:
+        raise ValueError("보고 종료일은 시작일보다 빠를 수 없습니다.")
+
+    df, headers = combine_workbooks(payloads)
+    inspection = inspect_source(
+        df,
+        headers,
+        file_count=len(payloads),
+        target_amount=target_amount,
+        manual_region=manual_region if region_mode == "manual" else "",
+    )
+    target_region = inspection["target_region"]
+    result = build_review_workbook_from_source(
+        df,
+        headers,
+        target_amount=target_amount,
+        target_region=target_region,
+        business_addresses=business_addresses,
+        row_addresses=row_addresses,
+        report_year=report_year,
+        report_label=report_label,
+        start_date=report_start,
+        end_date=report_end,
+    )
+    return target_region, result, (time.perf_counter() - started) * 1000
+
+
 @app.get("/api/health")
 def health():
     return {
@@ -134,16 +217,12 @@ def health():
         "address_cache": address_cache.status(),
         "manual_address_backend": manual_backend_name(),
         "manual_address_migration": migration_status(),
-        "manual_address_backup": backup_status(),
         "public_data_api_configured": bool(get_api_key()),
     }
 
 
 @app.get("/api/config")
-def config(background_tasks: BackgroundTasks):
-    # Safety backup: at most once per day while the service is being used.
-    # Manual saves also trigger an immediate backup attempt.
-    background_tasks.add_task(backup_manual_addresses, False)
+def config():
     return {
         "regions": CHUNGNAM_REGIONS,
         "default_target_amount": DEFAULT_TARGET_AMOUNT,
@@ -152,7 +231,6 @@ def config(background_tasks: BackgroundTasks):
         "address_cache": address_cache.status(),
         "manual_address_backend": manual_backend_name(),
         "manual_address_migration": migration_status(),
-        "manual_address_backup": backup_status(),
         "public_data_api_configured": bool(get_api_key()),
         "default_report": {
             "year": 2026,
@@ -185,17 +263,64 @@ def address_bulk_lookup(payload: AddressBulkLookupRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.post("/api/address/bulk-stream")
+def address_bulk_stream(payload: AddressBulkLookupRequest):
+    """Stream truthful lookup progress as newline-delimited JSON."""
+    if not payload.biz_numbers:
+        raise HTTPException(status_code=400, detail="조회할 사업자등록번호가 없습니다.")
+
+    events = queue.Queue()
+    sentinel = object()
+
+    def progress(event):
+        events.put(event)
+
+    def worker():
+        try:
+            result = bulk_lookup_addresses(
+                payload.biz_numbers,
+                force_refresh=payload.force_refresh,
+                progress_callback=progress,
+            )
+            events.put({"type": "result", "data": result})
+        except ValueError as exc:
+            events.put({"type": "error", "detail": str(exc), "status": 422})
+        except Exception as exc:
+            events.put({
+                "type": "error",
+                "detail": f"주소 조회 중 오류가 발생했습니다: {exc}",
+                "status": 500,
+            })
+        finally:
+            events.put(sentinel)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def generate():
+        while True:
+            item = events.get()
+            if item is sentinel:
+                break
+            yield json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.post("/api/manual/save")
-def manual_address_save(payload: ManualAddressSaveRequest, background_tasks: BackgroundTasks):
+def manual_address_save(payload: ManualAddressSaveRequest):
     try:
-        result = save_manual_address(
+        return save_manual_address(
             payload.biz_no,
             payload.address,
             payload.company_name,
         )
-        if result.get("backend") == "firestore":
-            background_tasks.add_task(backup_manual_addresses, True)
-        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -212,13 +337,17 @@ async def prepare_inspect(
 
     payloads = await _read_upload_payloads(files)
     selected_region = manual_region if region_mode == "manual" else ""
+    started = time.perf_counter()
 
     try:
-        return inspect_workbooks(
+        result = await run_in_threadpool(
+            inspect_workbooks,
             payloads,
-            target_amount=target_amount,
-            manual_region=selected_region,
+            target_amount,
+            selected_region,
         )
+        result["processing_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
@@ -242,19 +371,13 @@ async def prepare_quarter(
     payloads = await _read_upload_payloads(files)
 
     try:
-        business_addresses, row_addresses = _parse_address_overrides(address_overrides_json)
-        inspection = inspect_workbooks(
+        target_region, result, processing_ms = await run_in_threadpool(
+            _quarter_sync,
             payloads,
-            target_amount=target_amount,
-            manual_region=manual_region if region_mode == "manual" else "",
-        )
-        target_region = inspection["target_region"]
-        result = build_quarter_report(
-            payloads,
-            target_amount=target_amount,
-            target_region=target_region,
-            business_addresses=business_addresses,
-            row_addresses=row_addresses,
+            target_amount,
+            region_mode,
+            manual_region,
+            address_overrides_json,
         )
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -271,6 +394,7 @@ async def prepare_quarter(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Server-Timing": f"app;dur={processing_ms:.1f}",
             "X-Record-Count": str(result["record_count"]),
             "X-Region": quote(target_region),
         },
@@ -295,29 +419,17 @@ async def prepare_review(
     payloads = await _read_upload_payloads(files)
 
     try:
-        business_addresses, row_addresses = _parse_address_overrides(address_overrides_json)
-        report_start = date.fromisoformat(start_date)
-        report_end = date.fromisoformat(end_date)
-        if report_end < report_start:
-            raise ValueError("보고 종료일은 시작일보다 빠를 수 없습니다.")
-
-        inspection = inspect_workbooks(
+        _target_region, result, processing_ms = await run_in_threadpool(
+            _review_sync,
             payloads,
-            target_amount=target_amount,
-            manual_region=manual_region if region_mode == "manual" else "",
-        )
-        target_region = inspection["target_region"]
-
-        result = build_review_workbook(
-            payloads,
-            target_amount=target_amount,
-            target_region=target_region,
-            business_addresses=business_addresses,
-            row_addresses=row_addresses,
-            report_year=report_year,
-            report_label=report_label,
-            start_date=report_start,
-            end_date=report_end,
+            target_amount,
+            region_mode,
+            manual_region,
+            address_overrides_json,
+            report_year,
+            report_label,
+            start_date,
+            end_date,
         )
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -327,13 +439,14 @@ async def prepare_review(
             detail=f"검토용 Excel 생성 중 오류가 발생했습니다: {exc}",
         ) from exc
 
-    filename = f"{report_year}_{report_label}_{target_region}_지역경제활성화_검토용.xlsx"
+    filename = f"{report_year}_{report_label}_{_target_region}_지역경제활성화_검토용.xlsx"
     encoded_filename = quote(filename)
     return StreamingResponse(
         BytesIO(result["bytes"]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Server-Timing": f"app;dur={processing_ms:.1f}",
             "X-Record-Count": str(result["record_count"]),
             "X-Filled-Address-Count": str(result["filled_address_count"]),
             "X-Unresolved-Address-Count": str(result["unresolved_address_count"]),
@@ -344,8 +457,9 @@ async def prepare_review(
 @app.post("/api/final/report")
 async def final_report(file: UploadFile = File(...)):
     payloads = await _read_upload_payloads([file])
+    started = time.perf_counter()
     try:
-        result = build_final_halfyear_report(payloads[0])
+        result = await run_in_threadpool(build_final_halfyear_report, payloads[0])
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
@@ -354,6 +468,7 @@ async def final_report(file: UploadFile = File(...)):
             detail=f"최종 반기보고서 생성 중 오류가 발생했습니다: {exc}",
         ) from exc
 
+    processing_ms = (time.perf_counter() - started) * 1000
     region = result.get("region", "") or "지역"
     institution = result.get("institution", "") or "기관"
     year = result.get("year", "") or "반기"
@@ -367,6 +482,7 @@ async def final_report(file: UploadFile = File(...)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Server-Timing": f"app;dur={processing_ms:.1f}",
             "X-Record-Count": str(result["record_count"]),
             "X-Region": quote(region),
             "X-Institution": quote(institution),

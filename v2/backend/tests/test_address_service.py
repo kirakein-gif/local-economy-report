@@ -239,5 +239,39 @@ class AddressServiceTests(unittest.TestCase):
         self.assertIn("revalidation_failed_at", cached)
 
 
+    @patch.object(address_service, "get_local_franchise_address", return_value=None)
+    @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
+    @patch.object(address_service, "get_s2b_address", return_value=None)
+    @patch.object(address_service, "get_procurement_address", return_value=None)
+    def test_expired_stale_grace_stops_using_old_address(self, *_):
+        from app.cache import REVALIDATION_MAX_STALE_SECONDS
+        import time
+
+        now = int(time.time())
+        stale = {
+            "address": "충청남도 천안시 너무오래된주소",
+            "source": "나라장터",
+            "found": True,
+            "updated_at": now - 40 * 86400,
+            "verified_at": now - 40 * 86400,
+            "expires_at": 1,
+            "revalidation_first_failed_at": now - REVALIDATION_MAX_STALE_SECONDS - 10,
+        }
+        with address_cache._lock:
+            address_cache._local["1234567890"] = dict(stale)
+
+        result = address_service.lookup_address("1234567890")
+
+        self.assertFalse(result["found"])
+        self.assertFalse(result["revalidation_failed"])
+        cached = address_cache.get("1234567890")
+        self.assertIsNotNone(cached)
+        self.assertFalse(cached["found"])
+        self.assertEqual(
+            cached["last_verified_address"],
+            "충청남도 천안시 너무오래된주소",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

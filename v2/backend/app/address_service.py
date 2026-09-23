@@ -1,5 +1,7 @@
 import os
 import re
+import threading
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,7 +10,7 @@ import requests
 
 from .cache import DEFAULT_NEGATIVE_TTL, DEFAULT_POSITIVE_TTL, address_cache
 from .excel_service import normalize_biz_no
-from .manual_store import get_manual_address
+from .manual_store import get_manual_address, get_manual_addresses
 
 PROCUREMENT_URL = "https://apis.data.go.kr/1230000/ao/UsrInfoService02/getPrcrmntCorpBasicInfo02"
 S2B_URL = "https://www.s2b.kr/S2BNCustomer/S2B/scrweb/common/search_api/search_json.jsp"
@@ -17,12 +19,23 @@ LOCAL_FRANCHISE_URL = "https://apis.data.go.kr/B190001/localFranchisesV3/franchi
 
 MAX_BULK_BUSINESSES = 200
 DEFAULT_WORKERS = 2
+API_TIMEOUT = (3.05, 8)
+_http_local = threading.local()
+
 PUBLIC_SOURCE_NAMES = {
     "나라장터",
     "학교장터(S2B)",
     "공정위 통신판매사업자",
     "지역화폐 가맹점",
 }
+
+
+def _http_session():
+    session = getattr(_http_local, "session", None)
+    if session is None:
+        session = requests.Session()
+        _http_local.session = session
+    return session
 
 
 def _clean(value):
@@ -55,7 +68,7 @@ def get_procurement_address(biz_num):
         "bizno": biz,
     }
     try:
-        res = requests.get(PROCUREMENT_URL, params=params, timeout=10)
+        res = _http_session().get(PROCUREMENT_URL, params=params, timeout=API_TIMEOUT)
         res.raise_for_status()
         data = res.json()
         if "nkoneps.com.response.ResponseError" in data:
@@ -114,7 +127,7 @@ def get_s2b_address(biz_num):
     }
 
     try:
-        res = requests.post(S2B_URL, data=payload, headers=headers, timeout=10)
+        res = _http_session().post(S2B_URL, data=payload, headers=headers, timeout=API_TIMEOUT)
         res.raise_for_status()
         data = res.json()
 
@@ -157,7 +170,7 @@ def get_ftc_mail_order_address(biz_num):
         "brno": biz,
     }
     try:
-        res = requests.get(FTC_MAIL_ORDER_URL, params=params, timeout=10)
+        res = _http_session().get(FTC_MAIL_ORDER_URL, params=params, timeout=API_TIMEOUT)
         res.raise_for_status()
         root = ET.fromstring(res.content)
 
@@ -193,7 +206,7 @@ def get_local_franchise_address(biz_num):
         "returnType": "JSON",
     }
     try:
-        res = requests.get(LOCAL_FRANCHISE_URL, params=params, timeout=10)
+        res = _http_session().get(LOCAL_FRANCHISE_URL, params=params, timeout=API_TIMEOUT)
         res.raise_for_status()
         data = res.json()
 
@@ -235,8 +248,17 @@ def _base_result(biz, **extra):
     return result
 
 
-def _manual_suggestion(biz, *, cache_hit=False, cache_layer=""):
-    manual = get_manual_address(biz)
+def _emit(progress_callback, event):
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(dict(event))
+    except Exception:
+        pass
+
+
+def _manual_suggestion(biz, manual=None, *, cache_hit=False, cache_layer=""):
+    manual = manual if manual is not None else get_manual_address(biz)
     if not manual:
         return _base_result(
             biz,
@@ -253,39 +275,7 @@ def _manual_suggestion(biz, *, cache_hit=False, cache_layer=""):
     )
 
 
-def lookup_address(biz_num, force_refresh=False):
-    biz = normalize_biz_no(biz_num)
-    if not biz:
-        return _base_result("", invalid=True)
-
-    # Public API results cached from earlier runs are trusted and can be reused.
-    # User-entered addresses are intentionally NOT treated as authoritative cache.
-    if not force_refresh:
-        cached = address_cache.get(biz)
-        if cached is not None:
-            cached_source = str(cached.get("source", "") or "")
-            cached_found = bool(cached.get("found"))
-            cache_layer = cached.get("cache_layer", "")
-
-            if cached_found and cached_source in PUBLIC_SOURCE_NAMES:
-                return _base_result(
-                    biz,
-                    address=cached.get("address", ""),
-                    source=cached_source,
-                    found=True,
-                    cache_hit=True,
-                    cache_layer=cache_layer,
-                )
-
-            # A recent negative API lookup can be reused to avoid repeating API calls.
-            # If a user-entered address exists, expose it only as a suggestion.
-            if not cached_found:
-                return _manual_suggestion(
-                    biz,
-                    cache_hit=True,
-                    cache_layer=cache_layer,
-                )
-
+def _lookup_public_sources(biz, manual=None, progress_callback=None):
     sources = [
         ("나라장터", get_procurement_address),
         ("학교장터(S2B)", get_s2b_address),
@@ -294,6 +284,11 @@ def lookup_address(biz_num, force_refresh=False):
     ]
 
     for source, getter in sources:
+        _emit(progress_callback, {
+            "type": "source",
+            "biz_no": biz,
+            "source": source,
+        })
         address = getter(biz)
         if address:
             address_cache.set(
@@ -317,13 +312,47 @@ def lookup_address(biz_num, force_refresh=False):
         found=False,
         ttl_seconds=DEFAULT_NEGATIVE_TTL,
     )
-
-    # Only after public sources fail do we expose a human-entered saved address.
-    # It remains unconfirmed until the user explicitly applies it in the UI.
-    return _manual_suggestion(biz)
+    return _manual_suggestion(biz, manual=manual)
 
 
-def bulk_lookup_addresses(biz_numbers, force_refresh=False):
+def lookup_address(biz_num, force_refresh=False, progress_callback=None):
+    biz = normalize_biz_no(biz_num)
+    if not biz:
+        return _base_result("", invalid=True)
+
+    if not force_refresh:
+        cached = address_cache.get(biz)
+        if cached is not None:
+            cached_source = str(cached.get("source", "") or "")
+            cached_found = bool(cached.get("found"))
+            cache_layer = cached.get("cache_layer", "")
+
+            if cached_found and cached_source in PUBLIC_SOURCE_NAMES:
+                return _base_result(
+                    biz,
+                    address=cached.get("address", ""),
+                    source=cached_source,
+                    found=True,
+                    cache_hit=True,
+                    cache_layer=cache_layer,
+                )
+
+            if not cached_found:
+                return _manual_suggestion(
+                    biz,
+                    cache_hit=True,
+                    cache_layer=cache_layer,
+                )
+
+    return _lookup_public_sources(
+        biz,
+        manual=get_manual_address(biz),
+        progress_callback=progress_callback,
+    )
+
+
+def bulk_lookup_addresses(biz_numbers, force_refresh=False, progress_callback=None):
+    started = time.perf_counter()
     normalized = []
     invalid = []
     seen = set()
@@ -343,23 +372,92 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
             f"한 번에 최대 {MAX_BULK_BUSINESSES}개 업체까지 주소를 조회할 수 있습니다."
         )
 
+    total = len(normalized)
+    _emit(progress_callback, {
+        "type": "start",
+        "total": total,
+        "requested_count": len(biz_numbers),
+    })
+
+    # One batch read for trusted API cache and one batch read for user-saved suggestions.
+    cached_by_biz = {} if force_refresh else address_cache.get_many(normalized)
+    manual_by_biz = get_manual_addresses(normalized)
+
+    results_by_biz = {}
+    pending = []
+    completed = 0
+
+    def complete(biz, item):
+        nonlocal completed
+        results_by_biz[biz] = item
+        completed += 1
+        _emit(progress_callback, {
+            "type": "complete",
+            "biz_no": biz,
+            "completed": completed,
+            "total": total,
+            "found": bool(item.get("found")),
+            "source": item.get("source", ""),
+            "cache_hit": bool(item.get("cache_hit")),
+            "manual_suggestion": bool(item.get("manual_suggestion")),
+        })
+
+    for biz in normalized:
+        cached = cached_by_biz.get(biz)
+        if cached is None:
+            pending.append(biz)
+            continue
+
+        cached_source = str(cached.get("source", "") or "")
+        cache_layer = cached.get("cache_layer", "")
+        if bool(cached.get("found")) and cached_source in PUBLIC_SOURCE_NAMES:
+            complete(
+                biz,
+                _base_result(
+                    biz,
+                    address=cached.get("address", ""),
+                    source=cached_source,
+                    found=True,
+                    cache_hit=True,
+                    cache_layer=cache_layer,
+                ),
+            )
+        elif not bool(cached.get("found")):
+            complete(
+                biz,
+                _manual_suggestion(
+                    biz,
+                    manual=manual_by_biz.get(biz),
+                    cache_hit=True,
+                    cache_layer=cache_layer,
+                ),
+            )
+        else:
+            pending.append(biz)
+
     worker_count = min(
         max(int(os.getenv("ADDRESS_LOOKUP_WORKERS", str(DEFAULT_WORKERS))), 1),
         4,
     )
 
-    results_by_biz = {}
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        futures = {
-            executor.submit(lookup_address, biz, force_refresh): biz
-            for biz in normalized
-        }
-        for future in as_completed(futures):
-            biz = futures[future]
-            try:
-                results_by_biz[biz] = future.result()
-            except Exception:
-                results_by_biz[biz] = _base_result(biz)
+    if pending:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(
+                    _lookup_public_sources,
+                    biz,
+                    manual_by_biz.get(biz),
+                    progress_callback,
+                ): biz
+                for biz in pending
+            }
+            for future in as_completed(futures):
+                biz = futures[future]
+                try:
+                    item = future.result()
+                except Exception:
+                    item = _manual_suggestion(biz, manual=manual_by_biz.get(biz))
+                complete(biz, item)
 
     results = [results_by_biz[biz] for biz in normalized]
     source_counts = {
@@ -373,7 +471,7 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
         if item.get("found") and source in source_counts:
             source_counts[source] += 1
 
-    return {
+    result = {
         "requested_count": len(biz_numbers),
         "unique_valid_count": len(normalized),
         "invalid_count": len(invalid),
@@ -391,5 +489,7 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False):
         ),
         "source_counts": source_counts,
         "cache": address_cache.status(),
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
         "results": results,
     }
+    return result

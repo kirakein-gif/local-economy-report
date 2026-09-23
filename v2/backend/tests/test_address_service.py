@@ -92,7 +92,7 @@ class AddressServiceTests(unittest.TestCase):
 
     @patch.object(address_service, "_lookup_public_sources")
     def test_bulk_deduplicates_business_numbers(self, lookup):
-        lookup.side_effect = lambda biz, manual=None, progress_callback=None: {
+        lookup.side_effect = lambda biz, manual=None, progress_callback=None, *args, **kwargs: {
             "biz_no": biz,
             "address": "충남",
             "source": "나라장터",
@@ -209,6 +209,34 @@ class AddressServiceTests(unittest.TestCase):
         self.assertEqual(payload["previous_source"], "나라장터")
         self.assertIn("changed_at", payload)
         self.assertIn("verified_at", payload)
+
+
+    @patch.object(address_service, "get_local_franchise_address", return_value=None)
+    @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
+    @patch.object(address_service, "get_s2b_address", return_value=None)
+    @patch.object(address_service, "get_procurement_address", return_value=None)
+    def test_failed_revalidation_keeps_last_verified_address_for_retry(self, *_):
+        stale = {
+            "address": "충청남도 천안시 마지막확인주소",
+            "source": "나라장터",
+            "found": True,
+            "updated_at": 100,
+            "verified_at": 100,
+            "expires_at": 1,
+        }
+        with address_cache._lock:
+            address_cache._local["1234567890"] = dict(stale)
+
+        result = address_service.lookup_address("1234567890")
+
+        self.assertTrue(result["found"])
+        self.assertTrue(result["stale"])
+        self.assertTrue(result["revalidation_failed"])
+        self.assertEqual(result["address"], "충청남도 천안시 마지막확인주소")
+        cached = address_cache.get("1234567890")
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["verified_at"], 100)
+        self.assertIn("revalidation_failed_at", cached)
 
 
 if __name__ == "__main__":

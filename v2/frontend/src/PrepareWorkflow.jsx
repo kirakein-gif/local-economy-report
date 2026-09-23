@@ -598,7 +598,7 @@ export default function PrepareWorkflow({ config }) {
                 <label className="condition-label">기준 지역</label>
                 <select
                   className="region-one-select"
-                  value={regionMode === "auto" ? "__auto__" : manualRegion}
+                  value={regionMode === "auto" ? (result?.target_region || "__auto__") : manualRegion}
                   onChange={(event) => {
                     const value = event.target.value;
                     if (value === "__auto__") {

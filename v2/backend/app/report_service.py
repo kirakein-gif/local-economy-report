@@ -193,8 +193,9 @@ def _write_review_records(ws, records, target_region, institution_name, school_l
             ws.cell(row, 9).number_format = "yyyy-mm-dd"
 
 
-def build_review_workbook(
-    file_payloads,
+def build_review_workbook_from_source(
+    df,
+    headers,
     target_amount,
     target_region,
     business_addresses=None,
@@ -204,7 +205,6 @@ def build_review_workbook(
     start_date=date(2026, 1, 1),
     end_date=date(2026, 7, 31),
 ):
-    df, headers = combine_workbooks(file_payloads)
     filled_count = apply_address_overrides(
         df,
         headers,
@@ -248,6 +248,31 @@ def build_review_workbook(
         "school_level": school_level,
     }
 
+
+def build_review_workbook(
+    file_payloads,
+    target_amount,
+    target_region,
+    business_addresses=None,
+    row_addresses=None,
+    report_year=2026,
+    report_label="상반기",
+    start_date=date(2026, 1, 1),
+    end_date=date(2026, 7, 31),
+):
+    df, headers = combine_workbooks(file_payloads)
+    return build_review_workbook_from_source(
+        df,
+        headers,
+        target_amount=target_amount,
+        target_region=target_region,
+        business_addresses=business_addresses,
+        row_addresses=row_addresses,
+        report_year=report_year,
+        report_label=report_label,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 def _find_header_row(ws):
     for row in range(1, min(ws.max_row, 30) + 1):

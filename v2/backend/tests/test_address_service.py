@@ -90,9 +90,9 @@ class AddressServiceTests(unittest.TestCase):
         self.assertTrue(result["found"])
         self.assertEqual(result["source"], "학교장터(S2B)")
 
-    @patch.object(address_service, "lookup_address")
+    @patch.object(address_service, "_lookup_public_sources")
     def test_bulk_deduplicates_business_numbers(self, lookup):
-        lookup.side_effect = lambda biz, force_refresh=False: {
+        lookup.side_effect = lambda biz, manual=None, progress_callback=None: {
             "biz_no": biz,
             "address": "충남",
             "source": "나라장터",
@@ -115,6 +115,37 @@ class AddressServiceTests(unittest.TestCase):
         self.assertEqual(result["unique_valid_count"], 2)
         self.assertEqual(result["found_count"], 2)
         self.assertEqual(result["manual_suggestion_count"], 0)
+        self.assertEqual(lookup.call_count, 2)
+
+    @patch.object(address_service, "_lookup_public_sources")
+    def test_bulk_reports_truthful_completion_progress(self, lookup):
+        lookup.side_effect = lambda biz, manual=None, progress_callback=None: {
+            "biz_no": biz,
+            "address": "충남",
+            "source": "나라장터",
+            "found": True,
+            "cache_hit": False,
+            "cache_layer": "",
+            "cache_backend": "memory",
+            "manual_hit": False,
+            "manual_suggestion": False,
+            "saved_address": "",
+            "saved_company_name": "",
+            "invalid": False,
+        }
+        events = []
+
+        result = address_service.bulk_lookup_addresses(
+            ["1234567890", "1112233333"],
+            progress_callback=events.append,
+        )
+
+        self.assertEqual(result["found_count"], 2)
+        self.assertEqual(events[0]["type"], "start")
+        completes = [event for event in events if event.get("type") == "complete"]
+        self.assertEqual(len(completes), 2)
+        self.assertEqual(completes[-1]["completed"], 2)
+        self.assertEqual(completes[-1]["total"], 2)
 
 
 if __name__ == "__main__":

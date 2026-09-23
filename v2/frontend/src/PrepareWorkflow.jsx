@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const AMOUNT_PRESETS = [
   { value: 0, label: "0원" },
@@ -98,6 +99,11 @@ export default function PrepareWorkflow({ config }) {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewInfo, setReviewInfo] = useState(null);
   const [error, setError] = useState("");
+  const [sideTarget, setSideTarget] = useState(null);
+
+  useEffect(() => {
+    setSideTarget(document.getElementById("side-workflow-slot"));
+  }, []);
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
@@ -535,58 +541,48 @@ export default function PrepareWorkflow({ config }) {
 
   return (
     <>
-      <div className="workspace-status">
-        {result
-          ? "분석이 완료되었습니다. 바로 보고서를 만들거나 필요한 경우 주소를 보완하세요."
-          : files.length
-            ? "파일이 선택되었습니다. 집계 조건을 확인한 뒤 자료 분석을 실행하세요."
-            : "계약자료 Excel 파일을 선택해주세요."}
-      </div>
+      {sideTarget && createPortal(sidePanel, sideTarget)}
 
-      <section className="grid two streamlit-top-grid">
-        <article className="card top-card upload-card-rich">
-          <div className="panel-heading">
-            <div className="panel-heading-icon blue"><Icon type="document" /></div>
+      <section className="pre-analysis-grid">
+        <article className="card current-work-card">
+          <div className="compact-card-heading">
+            <span className="step">CURRENT WORK</span>
+            <h2>현재 작업</h2>
+            <p>왼쪽에서 자료를 선택하고, 오른쪽에서 집계 기준을 확인합니다.</p>
+          </div>
+          <div className="work-summary-list">
             <div>
-              <h2>1. 자료 업로드</h2>
-              <p>자료관리목록 Excel 파일을 선택합니다.</p>
+              <span>선택 자료</span>
+              <strong>{files.length ? `${files.length}개 파일` : "파일 대기"}</strong>
             </div>
-          </div>
-
-          <label
-            className={dragActive ? "dropzone rich-dropzone dragging" : "dropzone rich-dropzone"}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              multiple
-              onChange={(event) => {
-                applyFiles(event.target.files);
-                event.target.value = "";
-              }}
-            />
-            <strong>{files.length ? `Excel 파일 ${files.length}개 선택됨` : "Excel 파일을 여기에 놓거나 클릭"}</strong>
-            <span>{files.length ? "클릭하거나 다른 파일을 놓으면 선택 파일을 교체합니다." : "여러 파일 선택 가능 · .xlsx / .xls"}</span>
-          </label>
-
-          <div className="upload-checks-react">
-            <span>선택한 파일은 현재 작업 중에만 임시 사용됩니다.</span>
-          </div>
-          <div className="file-summary">
-            <span>선택 파일 <b>{files.length}개</b></span>
-            <span>총 용량 <b>{(totalSize / 1024 / 1024).toFixed(1)} MB</b></span>
+            <div>
+              <span>기준 지역</span>
+              <strong>{regionMode === "auto" ? "주소 기준 자동 선택" : manualRegion}</strong>
+            </div>
+            <div>
+              <span>집계 기준</span>
+              <strong>{formatNumber(targetAmount)}원 이상</strong>
+            </div>
+            <div>
+              <span>처리 상태</span>
+              <strong className={result ? "summary-status done" : files.length ? "summary-status ready" : "summary-status"}>
+                {result ? "분석 완료" : files.length ? "분석 가능" : "자료 필요"}
+              </strong>
+            </div>
+            {result && (
+              <div className="work-summary-highlight">
+                <span>보고 대상</span>
+                <strong>{formatNumber(result.report_count)}건</strong>
+              </div>
+            )}
           </div>
         </article>
 
-        <article className="card top-card conditions-card">
+        <article className="card conditions-card">
           <div className="panel-heading compact">
             <div className="panel-heading-icon navy"><Icon type="filter" /></div>
             <div>
-              <h2>2. 집계 조건</h2>
+              <h2>집계 조건</h2>
               <p>기준 지역과 집계 금액을 확인합니다.</p>
             </div>
           </div>
@@ -600,7 +596,7 @@ export default function PrepareWorkflow({ config }) {
             <select value={manualRegion} disabled={regionMode === "auto"} onChange={(event) => { setManualRegion(event.target.value); clearDerivedState(); }}>
               {regions.map((region) => <option value={region} key={region}>{region}</option>)}
             </select>
-            {regionMode === "auto" && <div className="auto-region-note">파일 업로드 후 주소를 기준으로 자동 선택합니다.</div>}
+            {regionMode === "auto" && <div className="auto-region-note">업로드 자료의 주소를 기준으로 자동 선택합니다.</div>}
           </div>
 
           <div className="condition-section amount-section">
@@ -645,16 +641,6 @@ export default function PrepareWorkflow({ config }) {
             </div>
           </div>
         </article>
-      </section>
-
-      <section className={files.length ? "action-row analysis-action ready primary-work-action" : "action-row analysis-action waiting primary-work-action"}>
-        <div>
-          <strong>{files.length ? "자료 분석 준비 완료" : "자료 업로드 대기"}</strong>
-          <span>{files.length ? `선택 파일 ${files.length}개 · ${formatNumber(targetAmount)}원 이상 계약을 분석합니다.` : "파일을 선택하면 보고 대상과 주소 보완 대상을 확인합니다."}</span>
-        </div>
-        <button className="primary" disabled={busy || !files.length} onClick={inspectFiles}>
-          {busy ? "분석 중..." : "자료 분석"}
-        </button>
       </section>
 
       {error && <div className="alert error">{error}</div>}
@@ -768,7 +754,40 @@ export default function PrepareWorkflow({ config }) {
                         {unresolvedCandidates.map((candidate) => {
                           const status = saveStatus[candidate.lookup_key];
                           const value = manualAddresses[candidate.lookup_key] || "";
-                          return (
+                          const sidePanel = (
+    <section className="side-card side-upload-card">
+      <div className="side-title">자료관리목록 불러오기</div>
+      <label
+        className={dragActive ? "side-dropzone dragging" : "side-dropzone"}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          multiple
+          onChange={(event) => {
+            applyFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <strong>{files.length ? `Excel ${files.length}개 선택됨` : "Excel을 여기에 놓거나 클릭"}</strong>
+        <span>{files.length ? `${(totalSize / 1024 / 1024).toFixed(1)} MB · 다시 선택하면 교체` : "여러 파일 선택 가능"}</span>
+      </label>
+      <button
+        className="primary side-analysis-button"
+        disabled={busy || !files.length}
+        onClick={inspectFiles}
+      >
+        {busy ? "자료 분석 중..." : "자료 분석"}
+      </button>
+      <div className="side-upload-note">선택한 파일은 현재 작업 중에만 임시 사용됩니다.</div>
+    </section>
+  );
+
+  return (
                             <div className="manual-row" key={candidate.lookup_key}>
                               <div className="company-cell"><strong>{candidate.company || "업체명 확인불가"}</strong><span>{candidate.biz_no || "사업자번호 확인불가"}</span></div>
                               <div className="address-entry-cell">

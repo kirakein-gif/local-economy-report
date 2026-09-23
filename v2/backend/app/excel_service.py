@@ -385,9 +385,13 @@ def _candidate_rows(df, missing_mask, biz_norm, company_col):
     return rows
 
 
-def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual_region=""):
-    df, headers = combine_workbooks(file_payloads)
-
+def inspect_source(
+    df,
+    headers,
+    file_count,
+    target_amount=DEFAULT_TARGET_AMOUNT,
+    manual_region="",
+):
     amount_col = find_source_col(headers, "amount")
     type_col = find_source_col(headers, "type")
     biz_col = find_source_col(headers, "biz")
@@ -430,7 +434,7 @@ def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual
     institution, school_level = extract_source_metadata(df, headers)
 
     return {
-        "file_count": len(file_payloads),
+        "file_count": int(file_count),
         "row_count": int(len(df)),
         "target_amount": int(target_amount),
         "auto_region": auto_region,
@@ -446,3 +450,14 @@ def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual
         "lookup_candidates": lookup_candidates,
         "manual_candidates": manual_candidates,
     }
+
+
+def inspect_workbooks(file_payloads, target_amount=DEFAULT_TARGET_AMOUNT, manual_region=""):
+    df, headers = combine_workbooks(file_payloads)
+    return inspect_source(
+        df,
+        headers,
+        file_count=len(file_payloads),
+        target_amount=target_amount,
+        manual_region=manual_region,
+    )

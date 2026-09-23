@@ -496,220 +496,204 @@ export default function PrepareWorkflow({ config }) {
     }
   }
 
+  const remainingAddressCount = result
+    ? (addressResult
+        ? Math.max(0, unresolvedCandidates.length - enteredManualCount)
+        : Number(result.missing_address_count || 0))
+    : 0;
+
+  const currentCompletionPercent = result?.report_count
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            ((Number(result.report_count) - remainingAddressCount) / Number(result.report_count)) * 1000
+          ) / 10
+        )
+      )
+    : 0;
+
   const resultFiles = (
-    <section className="output-panel unified-output">
-      <div className="result-head">
-        <div>
-          <p className="result-kicker">OUTPUT</p>
-          <h3>결과 파일</h3>
-        </div>
-        <span className="result-state done">생성 가능</span>
-      </div>
-      <div className="hint result-guide">
-        주소 보완은 선택사항입니다. 지금 바로 생성하거나, 주소를 조회·보완한 뒤 다시 생성할 수 있습니다.
-      </div>
-
-      <div className="output-action-stack">
-        <div className="output-action-copy">
-          <strong>분기별 실적보고서</strong>
-          <span>미확인 주소는 타시도로 임시 분류하여 바로 집계합니다.</span>
-        </div>
-        <button className="primary final-output-action" disabled={quarterBusy} onClick={createQuarterReport}>
-          <Icon type="download" size={19} />
-          {quarterBusy ? "분기보고서 생성 중..." : "분기보고서 다운로드"}
-        </button>
-
-        <div className="output-divider" />
-
-        <div className="output-action-copy">
-          <strong>반기 검토용 기초자료</strong>
-          <span>현재까지 확인된 주소를 반영해 공식 1-4 기초자료를 생성합니다.</span>
-        </div>
-        <button className="review-output-action" disabled={reviewBusy} onClick={createReviewWorkbook}>
-          <Icon type="download" size={19} />
-          {reviewBusy ? "검토용 Excel 생성 중..." : "검토용 Excel 다운로드"}
-        </button>
-      </div>
-
+    <section className="side-card side-output-card">
+      <div className="side-title">결과파일 다운로드</div>
+      <div className="side-output-note">주소 보완은 선택사항입니다.</div>
+      <button
+        className="side-output-button quarter"
+        disabled={quarterBusy}
+        onClick={createQuarterReport}
+      >
+        <Icon type="download" size={17} />
+        {quarterBusy ? "분기보고서 생성 중..." : "분기보고서"}
+      </button>
+      <button
+        className="side-output-button review"
+        disabled={reviewBusy}
+        onClick={createReviewWorkbook}
+      >
+        <Icon type="download" size={17} />
+        {reviewBusy ? "검토용 Excel 생성 중..." : "검토용 Excel"}
+      </button>
       {reviewInfo && (
-        <div className={reviewInfo.unresolvedCount ? "alert warn compact-output-alert" : "alert success compact-output-alert"}>
-          대상 {formatNumber(reviewInfo.recordCount)}건 · 주소 반영 {formatNumber(reviewInfo.filledCount)}건 · 미확인 {formatNumber(reviewInfo.unresolvedCount)}건
+        <div className="side-output-status">
+          대상 {formatNumber(reviewInfo.recordCount)}건 · 미확인 {formatNumber(reviewInfo.unresolvedCount)}건
         </div>
       )}
     </section>
   );
 
   const sidePanel = (
-    <section className="side-card side-upload-card">
-      <div className="side-title">자료관리목록 불러오기</div>
-      <label
-        className={dragActive ? "side-dropzone dragging" : "side-dropzone"}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          multiple
-          onChange={(event) => {
-            applyFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <strong>{files.length ? `Excel ${files.length}개 선택됨` : "Excel을 여기에 놓거나 클릭"}</strong>
-        <span>{files.length ? `${(totalSize / 1024 / 1024).toFixed(1)} MB · 다시 선택하면 교체` : "여러 파일 선택 가능"}</span>
-      </label>
-      <button
-        className="primary side-analysis-button"
-        disabled={busy || !files.length}
-        onClick={inspectFiles}
-      >
-        {busy ? "자료 분석 중..." : "자료 분석"}
-      </button>
-      <div className="side-upload-note">선택한 파일은 현재 작업 중에만 임시 사용됩니다.</div>
-    </section>
+    <>
+      <section className="side-card side-upload-card">
+        <div className="side-title">자료관리목록 불러오기</div>
+        <label
+          className={dragActive ? "side-dropzone dragging" : "side-dropzone"}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            multiple
+            onChange={(event) => {
+              applyFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <strong>{files.length ? `Excel ${files.length}개 선택됨` : "Excel을 여기에 놓거나 클릭"}</strong>
+          <span>{files.length ? `${(totalSize / 1024 / 1024).toFixed(1)} MB · 다시 선택하면 교체` : "여러 파일 선택 가능"}</span>
+        </label>
+        <button
+          className="primary side-analysis-button"
+          disabled={busy || !files.length}
+          onClick={inspectFiles}
+        >
+          {busy ? "자료 분석 중..." : "자료 분석"}
+        </button>
+        <div className="side-upload-note">선택한 파일은 현재 작업 중에만 임시 사용됩니다.</div>
+      </section>
+      {result && resultFiles}
+    </>
   );
 
   return (
     <>
       {sideTarget && createPortal(sidePanel, sideTarget)}
 
-      <section className="pre-analysis-grid">
-        <article className="card conditions-card compact-conditions-card">
-          <div className="panel-heading compact">
-            <div className="panel-heading-icon navy"><Icon type="filter" /></div>
-            <div>
-              <h2>집계 조건</h2>
-              <p>분석에 사용할 지역과 금액 기준만 선택합니다.</p>
+      <section className="prepare-workspace-grid">
+        <div className="prepare-center-column">
+          <article className="card conditions-card compact-conditions-card">
+            <div className="panel-heading compact">
+              <div className="panel-heading-icon navy"><Icon type="filter" /></div>
+              <div>
+                <h2>집계 조건</h2>
+                <p>지역과 금액 기준을 선택합니다.</p>
+              </div>
             </div>
-          </div>
 
-          <div className="condition-compact-grid">
-            <div className="compact-condition-block">
-              <div className="condition-label-row compact-label-row">
+            <div className="condition-one-line">
+              <div className="region-one-line">
                 <label className="condition-label">기준 지역</label>
-                <b>{regionMode === "auto" ? "자동" : manualRegion}</b>
-              </div>
-              <div className="segmented region-segmented compact-segmented">
-                <button className={regionMode === "auto" ? "selected" : ""} onClick={() => { setRegionMode("auto"); clearDerivedState(); }}>자동선택</button>
-                <button className={regionMode === "manual" ? "selected" : ""} onClick={() => { setRegionMode("manual"); clearDerivedState(); }}>직접선택</button>
-              </div>
-              {regionMode === "manual" && (
-                <select className="compact-region-select" value={manualRegion} onChange={(event) => { setManualRegion(event.target.value); clearDerivedState(); }}>
+                <select
+                  className="region-one-select"
+                  value={regionMode === "auto" ? "__auto__" : manualRegion}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "__auto__") {
+                      setRegionMode("auto");
+                    } else {
+                      setRegionMode("manual");
+                      setManualRegion(value);
+                    }
+                    clearDerivedState();
+                  }}
+                >
+                  <option value="__auto__">자동 선택</option>
                   {regions.map((region) => <option value={region} key={region}>{region}</option>)}
                 </select>
-              )}
-            </div>
-
-            <div className="compact-condition-block">
-              <div className="condition-label-row compact-label-row">
-                <label className="condition-label">집계 기준 금액 <span>(원 이상)</span></label>
-                <b>{formatNumber(targetAmount)}원</b>
               </div>
 
-              <div className="amount-presets compact-presets">
-                {AMOUNT_PRESETS.map((preset) => (
-                  <button
-                    key={preset.value}
-                    className={targetAmount === preset.value ? "active" : ""}
-                    onClick={() => changeTargetAmount(preset.value)}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
+              <div className="amount-one-line">
+                <div className="condition-label-row compact-label-row">
+                  <label className="condition-label">집계 기준 금액 <span>(원 이상)</span></label>
+                  <b>{formatNumber(targetAmount)}원</b>
+                </div>
 
-              <div className="direct-amount compact-direct-amount">
-                <span>직접입력</span>
-                <div className="money-input compact-money">
-                  <input type="number" min="0" step="10000" value={targetAmount} onChange={(event) => changeTargetAmount(event.target.value)} />
-                  <span>원</span>
+                <div className="amount-presets compact-presets">
+                  {AMOUNT_PRESETS.map((preset) => (
+                    <button
+                      key={preset.value}
+                      className={targetAmount === preset.value ? "active" : ""}
+                      onClick={() => changeTargetAmount(preset.value)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="amount-slider-wrap compact-slider-wrap">
+                  <input
+                    className="amount-slider"
+                    type="range"
+                    min="0"
+                    max={AMOUNT_PRESETS.length - 1}
+                    step="1"
+                    value={amountSliderIndex}
+                    onChange={(event) => changeTargetAmount(AMOUNT_PRESETS[Number(event.target.value)].value)}
+                  />
+                  <div className="slider-labels compact-slider-labels">
+                    {AMOUNT_PRESETS.map((preset) => <span key={preset.value}>{preset.label}</span>)}
+                  </div>
+                </div>
+
+                <div className="direct-amount compact-direct-amount">
+                  <span>직접입력</span>
+                  <div className="money-input compact-money">
+                    <input
+                      type="number"
+                      min="0"
+                      step="10000"
+                      value={targetAmount}
+                      onChange={(event) => changeTargetAmount(event.target.value)}
+                    />
+                    <span>원</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </article>
+          </article>
 
-        <aside className="card work-status-card">
-          <div className="work-status-head">
-            <span className="step">STATUS</span>
-            <h2>작업 상황</h2>
-          </div>
-          <div className="work-status-list">
-            <div>
-              <span>자료</span>
-              <strong>{files.length ? `${files.length}개 파일` : "대기"}</strong>
-            </div>
-            <div>
-              <span>분석</span>
-              <strong className={result ? "status-value done" : files.length ? "status-value ready" : "status-value"}>
-                {result ? "완료" : files.length ? "실행 가능" : "대기"}
-              </strong>
-            </div>
-            {result ? (
-              <>
-                <div>
-                  <span>보고 대상</span>
-                  <strong>{formatNumber(result.report_count)}건</strong>
-                </div>
-                <div>
-                  <span>주소 미확인</span>
-                  <strong>{formatNumber(result.missing_address_count)}건</strong>
-                </div>
-              </>
-            ) : (
-              <div className="work-status-note">
-                왼쪽에서 파일을 올린 뒤 <b>자료 분석</b>을 실행하세요.
-              </div>
-            )}
-          </div>
-        </aside>
-      </section>
+          {error && <div className="alert error">{error}</div>}
 
-      {error && <div className="alert error">{error}</div>}
-
-      {result && (
-        <section className="results visual-results">
-          <div className="result-title">
-            <div><span className="step">ANALYSIS</span><h2>분석 결과</h2></div>
-            <span className="pill">{result.target_region} 기준</span>
-          </div>
-          <div className="metric-grid">
-            <div className="metric"><span>전체 데이터</span><strong>{formatNumber(result.row_count)}</strong><small>행</small></div>
-            <div className="metric"><span>보고 대상</span><strong>{formatNumber(result.report_count)}</strong><small>건</small></div>
-            <div className="metric"><span>주소 보완 필요</span><strong>{formatNumber(result.missing_address_count)}</strong><small>건</small></div>
-            <div className="metric"><span>주소 완성률</span><strong>{result.address_completion_percent}</strong><small>%</small></div>
-          </div>
-          <div className="result-foot">
-            기관: <b>{result.institution || "자동 확인 실패"}</b> · 자동 감지 지역: <b>{result.auto_region}</b> · API 조회 후보: <b>{formatNumber(result.api_lookup_candidate_count)}개 업체</b> · 기준 금액: <b>{formatNumber(result.target_amount)}원</b>
-            {result.processing_ms ? <> · 분석 <b>{(Number(result.processing_ms) / 1000).toFixed(1)}초</b></> : null}
-          </div>
-
-          <div className="post-analysis-layout">
-            <div className="address-workspace">
+          {result && (
+            <section className="card address-main-card">
               <div className="workflow-section-head compact-workflow-head">
-                <div className="workflow-pin"><Icon type="pin" size={30} /></div>
+                <div className="workflow-pin"><Icon type="pin" size={28} /></div>
                 <div>
                   <h3>주소 보완 <span className="optional-label">선택사항</span></h3>
-                  <p>공공 API 캐시를 먼저 쓰고, 미확인 업체만 나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 조회합니다.</p>
+                  <p>공공 API 캐시를 우선 사용하고, 미확인 업체만 순서대로 조회합니다.</p>
                 </div>
               </div>
 
               <article className="address-lookup-card">
                 <div className="address-lookup-head">
                   <div>
-                    <span className="step-number">2</span>
+                    <span className="step-number">1</span>
                     <div>
                       <h3>자동 주소 조회</h3>
-                      <p>사용자 저장주소는 자동 확정하지 않고 API가 모두 실패했을 때 후보로만 보여줍니다.</p>
+                      <p>나라장터 → 학교장터 → 공정위 → 지역화폐 순으로 확인합니다.</p>
                     </div>
                   </div>
                   <span className="lookup-target-badge">대상 {formatNumber(result.api_lookup_candidate_count)}개</span>
                 </div>
 
-                <button className="primary lookup-main-button" disabled={addressBusy || !!addressResult} onClick={lookupAddresses}>
+                <button
+                  className="primary lookup-main-button"
+                  disabled={addressBusy || !!addressResult}
+                  onClick={lookupAddresses}
+                >
                   <Icon type="search" size={20} />
                   {addressBusy ? "공공 API 주소 조회 중..." : addressResult ? "주소 조회 완료" : "자동 주소 조회 시작"}
                 </button>
@@ -733,68 +717,110 @@ export default function PrepareWorkflow({ config }) {
                         : <>Firestore 공공 API 캐시를 확인하고 있습니다.</>}
                     </div>
                     <div className="lookup-progress-sub">
-                      API 주소 확인 {formatNumber(addressProgress.found)}개 · 최대 {config?.max_bulk_businesses || 200}개 업체까지 조회
+                      API 주소 확인 {formatNumber(addressProgress.found)}개
                     </div>
                   </div>
                 )}
 
                 {!addressBusy && !addressResult && (
                   <div className="address-trust-note">
-                    <span><b>1</b> 공공 API 캐시</span>
-                    <span><b>2</b> 공공 API 실시간 조회</span>
-                    <span><b>3</b> 사용자 저장주소 확인</span>
+                    <span><b>1</b> API 캐시</span>
+                    <span><b>2</b> 공공 API</span>
+                    <span><b>3</b> 저장주소 확인</span>
                   </div>
                 )}
               </article>
 
               {addressResult && (
                 <>
-                  <div className="address-result">
-                    <div className="address-summary">
-                      <div><span>API 주소 확인</span><strong>{formatNumber(addressResult.found_count)}개</strong></div>
-                      <div><span>미확인</span><strong>{formatNumber(unresolvedCandidates.length)}개</strong></div>
-                      <div><span>API 캐시 재사용</span><strong>{formatNumber(addressResult.cache_hit_count)}개</strong></div>
-                      <div><span>사용자 저장주소 후보</span><strong>{formatNumber(addressResult.manual_suggestion_count)}개</strong></div>
-                    </div>
-                    <div className="source-line">
-                      나라장터 <b>{formatNumber(addressResult.source_counts?.["나라장터"])}</b><span>·</span>
-                      학교장터 <b>{formatNumber(addressResult.source_counts?.["학교장터(S2B)"])}</b><span>·</span>
-                      공정위 <b>{formatNumber(addressResult.source_counts?.["공정위 통신판매사업자"])}</b><span>·</span>
-                      지역화폐 <b>{formatNumber(addressResult.source_counts?.["지역화폐 가맹점"])}</b>
-                      {addressResult.elapsed_ms ? <><span>·</span> 조회시간 <b>{(Number(addressResult.elapsed_ms) / 1000).toFixed(1)}초</b></> : null}
-                    </div>
+                  <div className="source-summary-line">
+                    <span>나라장터 <b>{formatNumber(addressResult.source_counts?.["나라장터"])}</b></span>
+                    <span>학교장터 <b>{formatNumber(addressResult.source_counts?.["학교장터(S2B)"])}</b></span>
+                    <span>공정위 <b>{formatNumber(addressResult.source_counts?.["공정위 통신판매사업자"])}</b></span>
+                    <span>지역화폐 <b>{formatNumber(addressResult.source_counts?.["지역화폐 가맹점"])}</b></span>
+                    <span>캐시 <b>{formatNumber(addressResult.cache_hit_count)}</b></span>
+                    {addressResult.elapsed_ms ? <span>조회 <b>{(Number(addressResult.elapsed_ms) / 1000).toFixed(1)}초</b></span> : null}
                   </div>
 
                   {unresolvedCandidates.length > 0 && (
-                    <div className="manual-panel">
-                      <div className="manual-head">
+                    <div className="manual-panel compact-manual-panel">
+                      <div className="manual-head compact-manual-head">
                         <div>
                           <span className="step">OPTION</span>
                           <h3>주소 미확인 업체 직접 보완</h3>
-                          <p>이전 사용자 저장주소는 자동 적용되지 않습니다. 내용을 확인한 뒤 적용하거나 새 주소를 입력하세요.</p>
+                          <p>이전 저장주소는 확인 후 적용하고, 필요하면 새 주소를 입력하세요.</p>
                         </div>
                         <span className="manual-progress">입력 {enteredManualCount}/{unresolvedCandidates.length}</span>
                       </div>
-                      <div className="manual-list">
+
+                      <div className="manual-list compact-manual-list">
                         {unresolvedCandidates.map((candidate) => {
                           const status = saveStatus[candidate.lookup_key];
                           const value = manualAddresses[candidate.lookup_key] || "";
                           return (
-                            <div className="manual-row" key={candidate.lookup_key}>
-                              <div className="company-cell"><strong>{candidate.company || "업체명 확인불가"}</strong><span>{candidate.biz_no || "사업자번호 확인불가"}</span></div>
-                              <div className="address-entry-cell">
+                            <div className="manual-row compact-manual-row" key={candidate.lookup_key}>
+                              <div className="company-cell">
+                                <strong>{candidate.company || "업체명 확인불가"}</strong>
+                                <span>{candidate.biz_no || "사업자번호 확인불가"}</span>
+                              </div>
+
+                              <div className="compact-address-cell">
                                 {candidate.saved_address && (
-                                  <div className="saved-address-suggestion">
-                                    <div><span>이전 사용자 저장주소</span><strong>{candidate.saved_address}</strong></div>
-                                    <button type="button" onClick={() => { setManualAddresses((current) => ({ ...current, [candidate.lookup_key]: candidate.saved_address })); setReviewInfo(null); }}>확인 후 적용</button>
+                                  <div className="saved-inline">
+                                    <span title={candidate.saved_address}>이전 저장주소 · {candidate.saved_address}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setManualAddresses((current) => ({
+                                          ...current,
+                                          [candidate.lookup_key]: candidate.saved_address,
+                                        }));
+                                        setReviewInfo(null);
+                                      }}
+                                    >
+                                      적용
+                                    </button>
                                   </div>
                                 )}
-                                <input className="address-input" value={value} placeholder={candidate.saved_address ? "저장주소를 확인하거나 새 주소를 입력하세요" : "확인한 업체 주소를 입력하세요"} onChange={(event) => { setManualAddresses((current) => ({ ...current, [candidate.lookup_key]: event.target.value })); setReviewInfo(null); }} />
+                                <input
+                                  className="address-input"
+                                  value={value}
+                                  placeholder={candidate.saved_address ? "저장주소를 확인하거나 새 주소 입력" : "확인한 업체 주소 입력"}
+                                  onChange={(event) => {
+                                    setManualAddresses((current) => ({
+                                      ...current,
+                                      [candidate.lookup_key]: event.target.value,
+                                    }));
+                                    setReviewInfo(null);
+                                  }}
+                                />
                               </div>
-                              <div className="manual-buttons">
-                                {candidate.biz_no && <a className="secondary-link" href={`https://bizno.net/?query=${encodeURIComponent(candidate.biz_no)}`} target="_blank" rel="noreferrer">업체조회</a>}
-                                <button className="secondary" disabled={!candidate.biz_no || !String(value).trim() || status === "saving"} onClick={() => saveManual(candidate)}>
-                                  {status === "saving" ? "저장 중" : status === "shared" ? "Firestore 저장됨" : status === "local" ? "로컬 저장됨" : status === "error" ? "저장 재시도" : "주소 기억"}
+
+                              <div className="manual-buttons compact-manual-buttons">
+                                {candidate.biz_no && (
+                                  <a
+                                    className="secondary-link"
+                                    href={`https://bizno.net/?query=${encodeURIComponent(candidate.biz_no)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    업체조회
+                                  </a>
+                                )}
+                                <button
+                                  className="secondary"
+                                  disabled={!candidate.biz_no || !String(value).trim() || status === "saving"}
+                                  onClick={() => saveManual(candidate)}
+                                >
+                                  {status === "saving"
+                                    ? "저장 중"
+                                    : status === "shared"
+                                      ? "저장됨"
+                                      : status === "local"
+                                        ? "로컬 저장"
+                                        : status === "error"
+                                          ? "재시도"
+                                          : "주소 기억"}
                                 </button>
                               </div>
                             </div>
@@ -805,14 +831,52 @@ export default function PrepareWorkflow({ config }) {
                   )}
                 </>
               )}
+            </section>
+          )}
+        </div>
+
+        <aside className="prepare-right-column">
+          <section className="card analysis-summary-card">
+            <div className="analysis-summary-head">
+              <span className="step">ANALYSIS</span>
+              <h2>분석 요약</h2>
+              {result && <span className="pill">{result.target_region} 기준</span>}
             </div>
 
-            <aside className="result-output-column">
-              {resultFiles}
-            </aside>
-          </div>
-        </section>
-      )}
+            {!result ? (
+              <div className="analysis-empty">
+                왼쪽에서 파일을 올리고 <b>자료 분석</b>을 실행하면 결과가 표시됩니다.
+              </div>
+            ) : (
+              <>
+                <div className="analysis-summary-grid">
+                  <div>
+                    <span>전체 데이터</span>
+                    <strong>{formatNumber(result.row_count)}<small>행</small></strong>
+                  </div>
+                  <div>
+                    <span>보고 대상</span>
+                    <strong>{formatNumber(result.report_count)}<small>건</small></strong>
+                  </div>
+                  <div>
+                    <span>주소 보완 필요</span>
+                    <strong>{formatNumber(remainingAddressCount)}<small>건</small></strong>
+                  </div>
+                  <div>
+                    <span>주소 완성률</span>
+                    <strong>{currentCompletionPercent}<small>%</small></strong>
+                  </div>
+                </div>
+                <div className="analysis-summary-meta">
+                  <div><span>기관</span><b>{result.institution || "자동 확인 실패"}</b></div>
+                  <div><span>API 조회 후보</span><b>{formatNumber(result.api_lookup_candidate_count)}개</b></div>
+                  {result.processing_ms ? <div><span>분석 시간</span><b>{(Number(result.processing_ms) / 1000).toFixed(1)}초</b></div> : null}
+                </div>
+              </>
+            )}
+          </section>
+        </aside>
+      </section>
     </>
   );
 }

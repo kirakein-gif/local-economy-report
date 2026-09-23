@@ -6,6 +6,8 @@ DEFAULT_POSITIVE_TTL_DAYS = max(int(os.getenv("ADDRESS_POSITIVE_TTL_DAYS", "30")
 DEFAULT_POSITIVE_TTL = DEFAULT_POSITIVE_TTL_DAYS * 86400
 DEFAULT_NEGATIVE_TTL = 900
 REVALIDATION_RETRY_SECONDS = 86400
+REVALIDATION_MAX_STALE_DAYS = max(int(os.getenv("ADDRESS_REVALIDATION_MAX_STALE_DAYS", "7")), 1)
+REVALIDATION_MAX_STALE_SECONDS = REVALIDATION_MAX_STALE_DAYS * 86400
 MAX_LOCAL_ITEMS = 5000
 
 
@@ -45,6 +47,7 @@ class AddressCache:
             "positive_ttl_seconds": DEFAULT_POSITIVE_TTL,
             "positive_ttl_days": DEFAULT_POSITIVE_TTL_DAYS,
             "negative_ttl_seconds": DEFAULT_NEGATIVE_TTL,
+            "revalidation_max_stale_days": REVALIDATION_MAX_STALE_DAYS,
         }
 
     def _local_get(self, key, include_expired=False):
@@ -158,6 +161,14 @@ class AddressCache:
                         payload[field] = previous.get(field)
         else:
             payload["checked_at"] = now
+            previous_address = str(previous.get("address", "") or "").strip()
+            previous_source = str(previous.get("source", "") or "").strip()
+            if previous_address and previous.get("found"):
+                payload["last_verified_address"] = previous_address
+                payload["last_verified_source"] = previous_source
+                payload["last_verified_at"] = int(
+                    previous.get("verified_at", previous.get("updated_at", 0)) or 0
+                )
 
         self._local_set(key, payload)
 
@@ -194,11 +205,13 @@ class AddressCache:
             for key_name, value in previous.items()
             if key_name not in {"cache_layer", "stale"}
         }
+        first_failed_at = int(previous.get("revalidation_first_failed_at", 0) or 0) or now
         payload.update({
             "address": address,
             "source": source,
             "found": True,
             "expires_at": now + int(retry_seconds),
+            "revalidation_first_failed_at": first_failed_at,
             "revalidation_failed_at": now,
             "revalidation_retry_at": now + int(retry_seconds),
         })

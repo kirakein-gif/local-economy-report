@@ -535,16 +535,12 @@ export default function PrepareWorkflow({ config }) {
 
   return (
     <>
-      <div className="prepare-stage-strip" aria-label="작업 단계">
-        <div className={result ? "prepare-stage done" : files.length ? "prepare-stage active" : "prepare-stage"}>
-          <span>1</span><div><b>자료 분석</b><small>{result ? "완료" : files.length ? "분석 준비" : "파일 선택"}</small></div>
-        </div>
-        <div className={addressResult ? "prepare-stage done" : addressBusy ? "prepare-stage active" : "prepare-stage optional"}>
-          <span>2</span><div><b>주소 보완</b><small>{addressResult ? "조회 완료" : "선택사항"}</small></div>
-        </div>
-        <div className={result ? "prepare-stage ready" : "prepare-stage"}>
-          <span>3</span><div><b>결과 파일</b><small>{result ? "바로 생성 가능" : "분석 후 활성"}</small></div>
-        </div>
+      <div className="workspace-status">
+        {result
+          ? "분석이 완료되었습니다. 바로 보고서를 만들거나 필요한 경우 주소를 보완하세요."
+          : files.length
+            ? "파일이 선택되었습니다. 집계 조건을 확인한 뒤 자료 분석을 실행하세요."
+            : "계약자료 Excel 파일을 선택해주세요."}
       </div>
 
       <section className="grid two streamlit-top-grid">
@@ -552,8 +548,8 @@ export default function PrepareWorkflow({ config }) {
           <div className="panel-heading">
             <div className="panel-heading-icon blue"><Icon type="document" /></div>
             <div>
-              <h2>자료 입력</h2>
-              <p>계약자료 엑셀 파일을 업로드하세요. 여러 파일을 한 번에 선택할 수 있습니다.</p>
+              <h2>1. 자료 업로드</h2>
+              <p>자료관리목록 Excel 파일을 선택합니다.</p>
             </div>
           </div>
 
@@ -573,15 +569,12 @@ export default function PrepareWorkflow({ config }) {
                 event.target.value = "";
               }}
             />
-            <div className="upload-cloud"><Icon type="upload" size={64} /></div>
-            <strong>{files.length ? `Excel 파일 ${files.length}개 선택됨` : "여기에 파일을 드래그하거나 클릭하여 업로드하세요"}</strong>
-            <span>{files.length ? "클릭하거나 다른 파일을 끌어 놓으면 선택 파일을 교체합니다." : "Excel 파일(.xlsx, .xls)을 여러 개 선택할 수 있습니다."}</span>
-            <span className="fake-file-button">파일 선택하기</span>
+            <strong>{files.length ? `Excel 파일 ${files.length}개 선택됨` : "Excel 파일을 여기에 놓거나 클릭"}</strong>
+            <span>{files.length ? "클릭하거나 다른 파일을 놓으면 선택 파일을 교체합니다." : "여러 파일 선택 가능 · .xlsx / .xls"}</span>
           </label>
 
           <div className="upload-checks-react">
-            <span>✓ 파일을 드래그해서 놓아도 업로드할 수 있습니다.</span>
-            <span>✓ 선택한 파일은 현재 작업 중에만 임시 사용됩니다.</span>
+            <span>선택한 파일은 현재 작업 중에만 임시 사용됩니다.</span>
           </div>
           <div className="file-summary">
             <span>선택 파일 <b>{files.length}개</b></span>
@@ -593,8 +586,8 @@ export default function PrepareWorkflow({ config }) {
           <div className="panel-heading compact">
             <div className="panel-heading-icon navy"><Icon type="filter" /></div>
             <div>
-              <h2>검색 조건</h2>
-              <p>지역과 집계 기준 금액을 선택합니다.</p>
+              <h2>2. 집계 조건</h2>
+              <p>기준 지역과 집계 금액을 확인합니다.</p>
             </div>
           </div>
 
@@ -660,7 +653,7 @@ export default function PrepareWorkflow({ config }) {
           <span>{files.length ? `선택 파일 ${files.length}개 · ${formatNumber(targetAmount)}원 이상 계약을 분석합니다.` : "파일을 선택하면 보고 대상과 주소 보완 대상을 확인합니다."}</span>
         </div>
         <button className="primary" disabled={busy || !files.length} onClick={inspectFiles}>
-          {busy ? "분석 중..." : "자료 분석하기"}
+          {busy ? "분석 중..." : "자료 분석"}
         </button>
       </section>
 

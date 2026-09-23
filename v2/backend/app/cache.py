@@ -5,6 +5,7 @@ import time
 DEFAULT_POSITIVE_TTL_DAYS = max(int(os.getenv("ADDRESS_POSITIVE_TTL_DAYS", "30")), 1)
 DEFAULT_POSITIVE_TTL = DEFAULT_POSITIVE_TTL_DAYS * 86400
 DEFAULT_NEGATIVE_TTL = 900
+REVALIDATION_RETRY_SECONDS = 86400
 MAX_LOCAL_ITEMS = 5000
 
 
@@ -166,6 +167,48 @@ class AddressCache:
             except Exception as exc:
                 self._firestore_error = str(exc)
 
+        return payload
+
+
+    def keep_stale_after_failed_revalidation(
+        self,
+        key,
+        previous_item,
+        retry_seconds=REVALIDATION_RETRY_SECONDS,
+    ):
+        """Keep the last verified public address briefly when revalidation fails.
+
+        The previous verified_at value is preserved. This avoids treating a
+        temporary public-API outage as an address deletion while ensuring the
+        address is retried soon instead of receiving a fresh 30-day lifetime.
+        """
+        previous = dict(previous_item or {})
+        address = str(previous.get("address", "") or "").strip()
+        source = str(previous.get("source", "") or "").strip()
+        if not address or not previous.get("found"):
+            return None
+
+        now = int(time.time())
+        payload = {
+            key_name: value
+            for key_name, value in previous.items()
+            if key_name not in {"cache_layer", "stale"}
+        }
+        payload.update({
+            "address": address,
+            "source": source,
+            "found": True,
+            "expires_at": now + int(retry_seconds),
+            "revalidation_failed_at": now,
+            "revalidation_retry_at": now + int(retry_seconds),
+        })
+
+        self._local_set(key, payload)
+        if self._firestore is not None:
+            try:
+                self._firestore.collection(self.collection_name).document(key).set(payload)
+            except Exception as exc:
+                self._firestore_error = str(exc)
         return payload
 
 

@@ -2,7 +2,7 @@ import os
 import threading
 import time
 
-DEFAULT_POSITIVE_TTL = 86400
+DEFAULT_POSITIVE_TTL = 7 * 86400
 DEFAULT_NEGATIVE_TTL = 900
 MAX_LOCAL_ITEMS = 5000
 
@@ -40,6 +40,8 @@ class AddressCache:
             "active": self.active_backend,
             "collection": self.collection_name if self._firestore is not None else None,
             "fallback": self.requested_backend == "firestore" and self._firestore is None,
+            "positive_ttl_seconds": DEFAULT_POSITIVE_TTL,
+            "negative_ttl_seconds": DEFAULT_NEGATIVE_TTL,
         }
 
     def _local_get(self, key):
@@ -61,7 +63,7 @@ class AddressCache:
                     for k, v in self._local.items()
                     if int(v.get("expires_at", 0)) <= int(time.time())
                 ]
-                for old_key in expired[: max(1, len(expired))]:
+                for old_key in expired:
                     self._local.pop(old_key, None)
                 if len(self._local) >= MAX_LOCAL_ITEMS:
                     oldest = min(
@@ -72,29 +74,50 @@ class AddressCache:
             self._local[key] = dict(payload)
 
     def get(self, key):
-        local = self._local_get(key)
-        if local is not None:
-            local["cache_layer"] = "memory"
-            return local
+        return self.get_many([key]).get(key)
 
-        if self._firestore is None:
-            return None
+    def get_many(self, keys):
+        """Fetch cache entries with one Firestore get_all call for misses."""
+        unique = []
+        seen = set()
+        for key in keys:
+            key = str(key or "").strip()
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(key)
+
+        results = {}
+        firestore_keys = []
+        for key in unique:
+            local = self._local_get(key)
+            if local is not None:
+                local["cache_layer"] = "memory"
+                results[key] = local
+            else:
+                firestore_keys.append(key)
+
+        if self._firestore is None or not firestore_keys:
+            return results
 
         try:
-            snapshot = self._firestore.collection(self.collection_name).document(key).get()
-            if not snapshot.exists:
-                return None
-
-            data = snapshot.to_dict() or {}
-            if int(data.get("expires_at", 0)) <= int(time.time()):
-                return None
-
-            self._local_set(key, data)
-            data["cache_layer"] = "firestore"
-            return data
+            collection = self._firestore.collection(self.collection_name)
+            refs = [collection.document(key) for key in firestore_keys]
+            now = int(time.time())
+            for snapshot in self._firestore.get_all(refs):
+                if not snapshot.exists:
+                    continue
+                data = snapshot.to_dict() or {}
+                if int(data.get("expires_at", 0)) <= now:
+                    continue
+                key = snapshot.id
+                self._local_set(key, data)
+                item = dict(data)
+                item["cache_layer"] = "firestore"
+                results[key] = item
         except Exception as exc:
             self._firestore_error = str(exc)
-            return None
+
+        return results
 
     def set(self, key, *, address, source, found, ttl_seconds):
         now = int(time.time())

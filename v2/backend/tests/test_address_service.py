@@ -148,5 +148,68 @@ class AddressServiceTests(unittest.TestCase):
         self.assertEqual(completes[-1]["total"], 2)
 
 
+    def test_positive_cache_uses_thirty_day_ttl(self):
+        from app.cache import DEFAULT_POSITIVE_TTL, DEFAULT_POSITIVE_TTL_DAYS
+
+        self.assertEqual(DEFAULT_POSITIVE_TTL_DAYS, 30)
+        self.assertEqual(DEFAULT_POSITIVE_TTL, 30 * 86400)
+
+    @patch.object(address_service, "get_local_franchise_address", return_value=None)
+    @patch.object(address_service, "get_ftc_mail_order_address", return_value=None)
+    @patch.object(address_service, "get_s2b_address", return_value="충청남도 아산시 재확인주소")
+    @patch.object(address_service, "get_procurement_address", return_value=None)
+    def test_stale_cache_rechecks_original_source_first(
+        self,
+        procurement,
+        s2b,
+        ftc,
+        franchise,
+    ):
+        stale = {
+            "address": "충청남도 아산시 기존주소",
+            "source": "학교장터(S2B)",
+            "found": True,
+            "updated_at": 1,
+            "verified_at": 1,
+            "expires_at": 1,
+        }
+        with address_cache._lock:
+            address_cache._local["1234567890"] = dict(stale)
+
+        result = address_service.lookup_address("1234567890")
+
+        self.assertTrue(result["found"])
+        self.assertEqual(result["source"], "학교장터(S2B)")
+        self.assertEqual(result["address"], "충청남도 아산시 재확인주소")
+        s2b.assert_called_once()
+        procurement.assert_not_called()
+        ftc.assert_not_called()
+        franchise.assert_not_called()
+
+    def test_cache_preserves_previous_address_when_verified_address_changes(self):
+        previous = {
+            "address": "충청남도 천안시 이전주소 1",
+            "source": "나라장터",
+            "found": True,
+            "verified_at": 100,
+            "updated_at": 100,
+            "expires_at": 101,
+        }
+
+        payload = address_cache.set(
+            "1234567890",
+            address="충청남도 천안시 새주소 2",
+            source="나라장터",
+            found=True,
+            ttl_seconds=30 * 86400,
+            previous_item=previous,
+        )
+
+        self.assertEqual(payload["previous_address"], "충청남도 천안시 이전주소 1")
+        self.assertEqual(payload["previous_source"], "나라장터")
+        self.assertIn("changed_at", payload)
+        self.assertIn("verified_at", payload)
+
+
 if __name__ == "__main__":
     unittest.main()

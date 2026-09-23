@@ -539,6 +539,39 @@ export default function PrepareWorkflow({ config }) {
     </section>
   );
 
+  const sidePanel = (
+    <section className="side-card side-upload-card">
+      <div className="side-title">자료관리목록 불러오기</div>
+      <label
+        className={dragActive ? "side-dropzone dragging" : "side-dropzone"}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          multiple
+          onChange={(event) => {
+            applyFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <strong>{files.length ? `Excel ${files.length}개 선택됨` : "Excel을 여기에 놓거나 클릭"}</strong>
+        <span>{files.length ? `${(totalSize / 1024 / 1024).toFixed(1)} MB · 다시 선택하면 교체` : "여러 파일 선택 가능"}</span>
+      </label>
+      <button
+        className="primary side-analysis-button"
+        disabled={busy || !files.length}
+        onClick={inspectFiles}
+      >
+        {busy ? "자료 분석 중..." : "자료 분석"}
+      </button>
+      <div className="side-upload-note">선택한 파일은 현재 작업 중에만 임시 사용됩니다.</div>
+    </section>
+  );
+
   return (
     <>
       {sideTarget && createPortal(sidePanel, sideTarget)}
@@ -754,40 +787,7 @@ export default function PrepareWorkflow({ config }) {
                         {unresolvedCandidates.map((candidate) => {
                           const status = saveStatus[candidate.lookup_key];
                           const value = manualAddresses[candidate.lookup_key] || "";
-                          const sidePanel = (
-    <section className="side-card side-upload-card">
-      <div className="side-title">자료관리목록 불러오기</div>
-      <label
-        className={dragActive ? "side-dropzone dragging" : "side-dropzone"}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          multiple
-          onChange={(event) => {
-            applyFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <strong>{files.length ? `Excel ${files.length}개 선택됨` : "Excel을 여기에 놓거나 클릭"}</strong>
-        <span>{files.length ? `${(totalSize / 1024 / 1024).toFixed(1)} MB · 다시 선택하면 교체` : "여러 파일 선택 가능"}</span>
-      </label>
-      <button
-        className="primary side-analysis-button"
-        disabled={busy || !files.length}
-        onClick={inspectFiles}
-      >
-        {busy ? "자료 분석 중..." : "자료 분석"}
-      </button>
-      <div className="side-upload-note">선택한 파일은 현재 작업 중에만 임시 사용됩니다.</div>
-    </section>
-  );
-
-  return (
+                          return (
                             <div className="manual-row" key={candidate.lookup_key}>
                               <div className="company-cell"><strong>{candidate.company || "업체명 확인불가"}</strong><span>{candidate.biz_no || "사업자번호 확인불가"}</span></div>
                               <div className="address-entry-cell">

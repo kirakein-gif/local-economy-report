@@ -238,6 +238,8 @@ def _base_result(biz, **extra):
         "cache_hit": False,
         "cache_layer": "",
         "cache_backend": address_cache.active_backend,
+        "verified_at": 0,
+        "stale": False,
         "manual_hit": False,
         "manual_suggestion": False,
         "saved_address": "",
@@ -275,13 +277,21 @@ def _manual_suggestion(biz, manual=None, *, cache_hit=False, cache_layer=""):
     )
 
 
-def _lookup_public_sources(biz, manual=None, progress_callback=None):
+def _lookup_public_sources(
+    biz,
+    manual=None,
+    progress_callback=None,
+    preferred_source="",
+    previous_cache=None,
+):
     sources = [
         ("나라장터", get_procurement_address),
         ("학교장터(S2B)", get_s2b_address),
         ("공정위 통신판매사업자", get_ftc_mail_order_address),
         ("지역화폐 가맹점", get_local_franchise_address),
     ]
+    if preferred_source:
+        sources.sort(key=lambda item: 0 if item[0] == preferred_source else 1)
 
     for source, getter in sources:
         _emit(progress_callback, {
@@ -297,6 +307,7 @@ def _lookup_public_sources(biz, manual=None, progress_callback=None):
                 source=source,
                 found=True,
                 ttl_seconds=DEFAULT_POSITIVE_TTL,
+                previous_item=previous_cache,
             )
             return _base_result(
                 biz,
@@ -311,6 +322,7 @@ def _lookup_public_sources(biz, manual=None, progress_callback=None):
         source="",
         found=False,
         ttl_seconds=DEFAULT_NEGATIVE_TTL,
+        previous_item=previous_cache,
     )
     return _manual_suggestion(biz, manual=manual)
 
@@ -320,34 +332,42 @@ def lookup_address(biz_num, force_refresh=False, progress_callback=None):
     if not biz:
         return _base_result("", invalid=True)
 
-    if not force_refresh:
-        cached = address_cache.get(biz)
-        if cached is not None:
-            cached_source = str(cached.get("source", "") or "")
-            cached_found = bool(cached.get("found"))
-            cache_layer = cached.get("cache_layer", "")
+    cached = address_cache.get(biz, include_expired=True)
+    if cached is not None and not force_refresh and not cached.get("stale"):
+        cached_source = str(cached.get("source", "") or "")
+        cached_found = bool(cached.get("found"))
+        cache_layer = cached.get("cache_layer", "")
 
-            if cached_found and cached_source in PUBLIC_SOURCE_NAMES:
-                return _base_result(
-                    biz,
-                    address=cached.get("address", ""),
-                    source=cached_source,
-                    found=True,
-                    cache_hit=True,
-                    cache_layer=cache_layer,
-                )
+        if cached_found and cached_source in PUBLIC_SOURCE_NAMES:
+            return _base_result(
+                biz,
+                address=cached.get("address", ""),
+                source=cached_source,
+                found=True,
+                cache_hit=True,
+                cache_layer=cache_layer,
+                verified_at=int(cached.get("verified_at", cached.get("updated_at", 0)) or 0),
+            )
 
-            if not cached_found:
-                return _manual_suggestion(
-                    biz,
-                    cache_hit=True,
-                    cache_layer=cache_layer,
-                )
+        if not cached_found:
+            return _manual_suggestion(
+                biz,
+                cache_hit=True,
+                cache_layer=cache_layer,
+            )
+
+    preferred_source = ""
+    if cached and bool(cached.get("found")):
+        candidate_source = str(cached.get("source", "") or "")
+        if candidate_source in PUBLIC_SOURCE_NAMES:
+            preferred_source = candidate_source
 
     return _lookup_public_sources(
         biz,
         manual=get_manual_address(biz),
         progress_callback=progress_callback,
+        preferred_source=preferred_source,
+        previous_cache=cached,
     )
 
 
@@ -380,11 +400,11 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False, progress_callback=No
     })
 
     # One batch read for trusted API cache and one batch read for user-saved suggestions.
-    cached_by_biz = {} if force_refresh else address_cache.get_many(normalized)
+    cached_by_biz = address_cache.get_many(normalized, include_expired=True)
     manual_by_biz = get_manual_addresses(normalized)
 
     results_by_biz = {}
-    pending = []
+    pending = {}
     completed = 0
 
     def complete(biz, item):
@@ -405,12 +425,17 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False, progress_callback=No
     for biz in normalized:
         cached = cached_by_biz.get(biz)
         if cached is None:
-            pending.append(biz)
+            pending[biz] = None
             continue
 
         cached_source = str(cached.get("source", "") or "")
         cache_layer = cached.get("cache_layer", "")
-        if bool(cached.get("found")) and cached_source in PUBLIC_SOURCE_NAMES:
+        if (
+            not force_refresh
+            and not cached.get("stale")
+            and bool(cached.get("found"))
+            and cached_source in PUBLIC_SOURCE_NAMES
+        ):
             complete(
                 biz,
                 _base_result(
@@ -420,9 +445,10 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False, progress_callback=No
                     found=True,
                     cache_hit=True,
                     cache_layer=cache_layer,
+                    verified_at=int(cached.get("verified_at", cached.get("updated_at", 0)) or 0),
                 ),
             )
-        elif not bool(cached.get("found")):
+        elif not force_refresh and not cached.get("stale") and not bool(cached.get("found")):
             complete(
                 biz,
                 _manual_suggestion(
@@ -433,7 +459,7 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False, progress_callback=No
                 ),
             )
         else:
-            pending.append(biz)
+            pending[biz] = cached
 
     worker_count = min(
         max(int(os.getenv("ADDRESS_LOOKUP_WORKERS", str(DEFAULT_WORKERS))), 1),
@@ -448,8 +474,15 @@ def bulk_lookup_addresses(biz_numbers, force_refresh=False, progress_callback=No
                     biz,
                     manual_by_biz.get(biz),
                     progress_callback,
+                    (
+                        str(previous.get("source", "") or "")
+                        if previous and bool(previous.get("found"))
+                        and str(previous.get("source", "") or "") in PUBLIC_SOURCE_NAMES
+                        else ""
+                    ),
+                    previous,
                 ): biz
-                for biz in pending
+                for biz, previous in pending.items()
             }
             for future in as_completed(futures):
                 biz = futures[future]

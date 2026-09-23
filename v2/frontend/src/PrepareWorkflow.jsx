@@ -577,103 +577,95 @@ export default function PrepareWorkflow({ config }) {
       {sideTarget && createPortal(sidePanel, sideTarget)}
 
       <section className="pre-analysis-grid">
-        <article className="card current-work-card">
-          <div className="compact-card-heading">
-            <span className="step">CURRENT WORK</span>
-            <h2>현재 작업</h2>
-            <p>왼쪽에서 자료를 선택하고, 오른쪽에서 집계 기준을 확인합니다.</p>
-          </div>
-          <div className="work-summary-list">
-            <div>
-              <span>선택 자료</span>
-              <strong>{files.length ? `${files.length}개 파일` : "파일 대기"}</strong>
-            </div>
-            <div>
-              <span>기준 지역</span>
-              <strong>{regionMode === "auto" ? "주소 기준 자동 선택" : manualRegion}</strong>
-            </div>
-            <div>
-              <span>집계 기준</span>
-              <strong>{formatNumber(targetAmount)}원 이상</strong>
-            </div>
-            <div>
-              <span>처리 상태</span>
-              <strong className={result ? "summary-status done" : files.length ? "summary-status ready" : "summary-status"}>
-                {result ? "분석 완료" : files.length ? "분석 가능" : "자료 필요"}
-              </strong>
-            </div>
-            {result && (
-              <div className="work-summary-highlight">
-                <span>보고 대상</span>
-                <strong>{formatNumber(result.report_count)}건</strong>
-              </div>
-            )}
-          </div>
-        </article>
-
-        <article className="card conditions-card">
+        <article className="card conditions-card compact-conditions-card">
           <div className="panel-heading compact">
             <div className="panel-heading-icon navy"><Icon type="filter" /></div>
             <div>
               <h2>집계 조건</h2>
-              <p>기준 지역과 집계 금액을 확인합니다.</p>
+              <p>분석에 사용할 지역과 금액 기준만 선택합니다.</p>
             </div>
           </div>
 
-          <div className="condition-section">
-            <label className="condition-label">기준 지역</label>
-            <div className="segmented region-segmented">
-              <button className={regionMode === "auto" ? "selected" : ""} onClick={() => { setRegionMode("auto"); clearDerivedState(); }}>자동 선택</button>
-              <button className={regionMode === "manual" ? "selected" : ""} onClick={() => { setRegionMode("manual"); clearDerivedState(); }}>직접 선택</button>
-            </div>
-            <select value={manualRegion} disabled={regionMode === "auto"} onChange={(event) => { setManualRegion(event.target.value); clearDerivedState(); }}>
-              {regions.map((region) => <option value={region} key={region}>{region}</option>)}
-            </select>
-            {regionMode === "auto" && <div className="auto-region-note">업로드 자료의 주소를 기준으로 자동 선택합니다.</div>}
-          </div>
-
-          <div className="condition-section amount-section">
-            <div className="condition-label-row">
-              <label className="condition-label">집계 기준 금액 <span>(원 이상)</span></label>
-              <b>{formatNumber(targetAmount)}원</b>
-            </div>
-
-            <div className="amount-presets">
-              {AMOUNT_PRESETS.map((preset) => (
-                <button
-                  key={preset.value}
-                  className={targetAmount === preset.value ? "active" : ""}
-                  onClick={() => changeTargetAmount(preset.value)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="amount-slider-wrap">
-              <input
-                className="amount-slider"
-                type="range"
-                min="0"
-                max={AMOUNT_PRESETS.length - 1}
-                step="1"
-                value={amountSliderIndex}
-                onChange={(event) => changeTargetAmount(AMOUNT_PRESETS[Number(event.target.value)].value)}
-              />
-              <div className="slider-labels">
-                {AMOUNT_PRESETS.map((preset) => <span key={preset.value}>{preset.label}</span>)}
+          <div className="condition-compact-grid">
+            <div className="compact-condition-block">
+              <div className="condition-label-row compact-label-row">
+                <label className="condition-label">기준 지역</label>
+                <b>{regionMode === "auto" ? "자동" : manualRegion}</b>
               </div>
+              <div className="segmented region-segmented compact-segmented">
+                <button className={regionMode === "auto" ? "selected" : ""} onClick={() => { setRegionMode("auto"); clearDerivedState(); }}>자동선택</button>
+                <button className={regionMode === "manual" ? "selected" : ""} onClick={() => { setRegionMode("manual"); clearDerivedState(); }}>직접선택</button>
+              </div>
+              {regionMode === "manual" && (
+                <select className="compact-region-select" value={manualRegion} onChange={(event) => { setManualRegion(event.target.value); clearDerivedState(); }}>
+                  {regions.map((region) => <option value={region} key={region}>{region}</option>)}
+                </select>
+              )}
             </div>
 
-            <div className="direct-amount">
-              <span>직접 금액 입력</span>
-              <div className="money-input compact-money">
-                <input type="number" min="0" step="10000" value={targetAmount} onChange={(event) => changeTargetAmount(event.target.value)} />
-                <span>원</span>
+            <div className="compact-condition-block">
+              <div className="condition-label-row compact-label-row">
+                <label className="condition-label">집계 기준 금액 <span>(원 이상)</span></label>
+                <b>{formatNumber(targetAmount)}원</b>
+              </div>
+
+              <div className="amount-presets compact-presets">
+                {AMOUNT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    className={targetAmount === preset.value ? "active" : ""}
+                    onClick={() => changeTargetAmount(preset.value)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="direct-amount compact-direct-amount">
+                <span>직접입력</span>
+                <div className="money-input compact-money">
+                  <input type="number" min="0" step="10000" value={targetAmount} onChange={(event) => changeTargetAmount(event.target.value)} />
+                  <span>원</span>
+                </div>
               </div>
             </div>
           </div>
         </article>
+
+        <aside className="card work-status-card">
+          <div className="work-status-head">
+            <span className="step">STATUS</span>
+            <h2>작업 상황</h2>
+          </div>
+          <div className="work-status-list">
+            <div>
+              <span>자료</span>
+              <strong>{files.length ? `${files.length}개 파일` : "대기"}</strong>
+            </div>
+            <div>
+              <span>분석</span>
+              <strong className={result ? "status-value done" : files.length ? "status-value ready" : "status-value"}>
+                {result ? "완료" : files.length ? "실행 가능" : "대기"}
+              </strong>
+            </div>
+            {result ? (
+              <>
+                <div>
+                  <span>보고 대상</span>
+                  <strong>{formatNumber(result.report_count)}건</strong>
+                </div>
+                <div>
+                  <span>주소 미확인</span>
+                  <strong>{formatNumber(result.missing_address_count)}건</strong>
+                </div>
+              </>
+            ) : (
+              <div className="work-status-note">
+                왼쪽에서 파일을 올린 뒤 <b>자료 분석</b>을 실행하세요.
+              </div>
+            )}
+          </div>
+        </aside>
       </section>
 
       {error && <div className="alert error">{error}</div>}

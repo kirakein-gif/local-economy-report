@@ -4,7 +4,6 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
 from google.api_core.exceptions import AlreadyExists
 
 from .cache import address_cache
@@ -13,12 +12,12 @@ from .excel_service import normalize_biz_no
 MANUAL_COLLECTION = os.getenv(
     "MANUAL_ADDRESS_COLLECTION", "local_economy_manual_addresses"
 ).strip()
+SYSTEM_COLLECTION = os.getenv(
+    "SYSTEM_COLLECTION", "local_economy_system"
+).strip()
+MIGRATION_DOC_ID = "manual_addresses_migration_v1"
 LEGACY_MANUAL_FILE = os.getenv(
     "LEGACY_MANUAL_ADDRESS_FILE", "/app/data/manual_addresses.json"
-).strip()
-LEGACY_MANUAL_URL = os.getenv(
-    "LEGACY_MANUAL_ADDRESS_URL",
-    "https://raw.githubusercontent.com/kirakein-gif/local-economy-report/main/data/manual_addresses.json",
 ).strip()
 LEGACY_MIGRATION_ENABLED = os.getenv("LEGACY_MANUAL_MIGRATION_ENABLED", "1").strip().lower() not in {
     "0",
@@ -32,12 +31,13 @@ _local_lock = threading.RLock()
 _migration_lock = threading.Lock()
 _migration_status = {
     "attempted": False,
-    "source": "github_legacy",
+    "source": "bundled_legacy_snapshot",
     "loaded_count": 0,
     "created_count": 0,
     "existing_count": 0,
     "invalid_count": 0,
     "error_count": 0,
+    "completed": False,
     "error": "",
 }
 
@@ -87,35 +87,40 @@ def _clean_manual_record(biz_num, item):
     }
 
 
+def _snapshot_to_manual(snapshot):
+    if not snapshot or not snapshot.exists:
+        return None
+    data = snapshot.to_dict() or {}
+    address = str(data.get("address", "") or "").strip()
+    if not address:
+        return None
+    return {
+        "biz_no": snapshot.id,
+        "address": address,
+        "company_name": str(data.get("company_name", "") or "").strip(),
+        "updated_at": data.get("updated_at", ""),
+        "source": str(data.get("source", "manual") or "manual"),
+        "backend": "firestore",
+    }
+
+
 def _load_legacy_manual_addresses():
-    if not LEGACY_MIGRATION_ENABLED:
+    if not LEGACY_MIGRATION_ENABLED or not LEGACY_MANUAL_FILE:
         return {}
 
-    local_path = Path(LEGACY_MANUAL_FILE) if LEGACY_MANUAL_FILE else None
-    if local_path and local_path.exists():
-        payload = json.loads(local_path.read_text(encoding="utf-8"))
-        return payload if isinstance(payload, dict) else {}
-
-    if not LEGACY_MANUAL_URL:
+    path = Path(LEGACY_MANUAL_FILE)
+    if not path.exists():
         return {}
 
-    response = requests.get(
-        LEGACY_MANUAL_URL,
-        headers={"User-Agent": "local-economy-report-v2-migration"},
-        timeout=8,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else {}
 
 
 def migrate_legacy_manual_addresses():
-    """Import the legacy GitHub manual-address store without overwriting Firestore.
+    """Import the bundled legacy snapshot once without overwriting Firestore.
 
-    Firestore DocumentReference.create() is intentionally used instead of set().
-    If a business number already exists, the existing Firestore value wins.
-    This keeps the migration idempotent and safe when multiple Cloud Run
-    instances start at the same time.
+    A Firestore marker avoids re-scanning every legacy address on future cold starts.
+    DocumentReference.create() guarantees that an existing Firestore address always wins.
     """
     client = _firestore_client()
     with _migration_lock:
@@ -128,6 +133,24 @@ def migrate_legacy_manual_addresses():
             _migration_status["error"] = "Firestore가 활성화되지 않아 이관을 건너뜁니다."
             return dict(_migration_status)
 
+    marker_ref = client.collection(SYSTEM_COLLECTION).document(MIGRATION_DOC_ID)
+    try:
+        marker = marker_ref.get()
+        if marker.exists and bool((marker.to_dict() or {}).get("completed")):
+            marker_data = marker.to_dict() or {}
+            with _migration_lock:
+                _migration_status.update({
+                    "completed": True,
+                    "loaded_count": int(marker_data.get("loaded_count", 0) or 0),
+                    "created_count": int(marker_data.get("created_count", 0) or 0),
+                    "existing_count": int(marker_data.get("existing_count", 0) or 0),
+                    "error": "",
+                })
+                return dict(_migration_status)
+    except Exception as exc:
+        with _migration_lock:
+            _migration_status["error"] = f"이관 상태 확인 실패: {exc}"
+
     try:
         legacy = _load_legacy_manual_addresses()
     except Exception as exc:
@@ -137,12 +160,13 @@ def migrate_legacy_manual_addresses():
 
     result = {
         "attempted": True,
-        "source": "github_legacy",
+        "source": "bundled_legacy_snapshot",
         "loaded_count": len(legacy),
         "created_count": 0,
         "existing_count": 0,
         "invalid_count": 0,
         "error_count": 0,
+        "completed": False,
         "error": "",
     }
     migrated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -154,7 +178,7 @@ def migrate_legacy_manual_addresses():
             result["invalid_count"] += 1
             continue
 
-        payload["migrated_from"] = "github_legacy"
+        payload["migrated_from"] = "github_legacy_snapshot"
         payload["migrated_at"] = migrated_at
         try:
             collection.document(payload["biz_no"]).create(payload)
@@ -163,6 +187,20 @@ def migrate_legacy_manual_addresses():
             result["existing_count"] += 1
         except Exception:
             result["error_count"] += 1
+
+    if result["error_count"] == 0:
+        result["completed"] = True
+        try:
+            marker_ref.set({
+                "completed": True,
+                "completed_at": migrated_at,
+                "loaded_count": result["loaded_count"],
+                "created_count": result["created_count"],
+                "existing_count": result["existing_count"],
+            })
+        except Exception as exc:
+            result["completed"] = False
+            result["error"] = f"이관 완료표시 저장 실패: {exc}"
 
     with _migration_lock:
         _migration_status.update(result)
@@ -173,83 +211,40 @@ def get_manual_address(biz_num):
     biz = normalize_biz_no(biz_num)
     if not biz:
         return None
-
-    client = _firestore_client()
-    if client is not None:
-        try:
-            snap = client.collection(MANUAL_COLLECTION).document(biz).get()
-            if snap.exists:
-                data = snap.to_dict() or {}
-                address = str(data.get("address", "")).strip()
-                if address:
-                    return {
-                        "biz_no": biz,
-                        "address": address,
-                        "company_name": str(data.get("company_name", "")).strip(),
-                        "updated_at": data.get("updated_at", ""),
-                        "source": str(data.get("source", "manual") or "manual"),
-                        "backend": "firestore",
-                    }
-        except Exception:
-            pass
-
-    with _local_lock:
-        item = _local_manual.get(biz)
-        return dict(item) if item else None
+    return get_manual_addresses([biz]).get(biz)
 
 
 def get_manual_addresses(biz_numbers):
-    results = {}
+    unique = []
+    seen = set()
     for raw in biz_numbers:
         biz = normalize_biz_no(raw)
-        if not biz or biz in results:
-            continue
-        item = get_manual_address(biz)
-        if item:
-            results[biz] = item
-    return results
+        if biz and biz not in seen:
+            seen.add(biz)
+            unique.append(biz)
 
-
-def export_manual_addresses():
-    """Return a deterministic snapshot of user-entered addresses for backup."""
+    results = {}
     client = _firestore_client()
-    exported = {}
-
-    if client is not None:
+    if client is not None and unique:
         try:
-            for snap in client.collection(MANUAL_COLLECTION).stream():
-                data = snap.to_dict() or {}
-                payload = _clean_manual_record(snap.id, data)
-                if not payload:
-                    continue
-                record = {
-                    "address": payload["address"],
-                    "company_name": payload["company_name"],
-                    "status": "manual",
-                    "updated_at": payload["updated_at"],
-                }
-                previous_address = str(data.get("previous_address", "") or "").strip()
-                if previous_address:
-                    record["previous_address"] = previous_address
-                migrated_from = str(data.get("migrated_from", "") or "").strip()
-                if migrated_from:
-                    record["migrated_from"] = migrated_from
-                exported[payload["biz_no"]] = record
-            return dict(sorted(exported.items()))
+            collection = client.collection(MANUAL_COLLECTION)
+            refs = [collection.document(biz) for biz in unique]
+            for snapshot in client.get_all(refs):
+                item = _snapshot_to_manual(snapshot)
+                if item:
+                    results[item["biz_no"]] = item
         except Exception:
             pass
 
     with _local_lock:
-        for biz, data in _local_manual.items():
-            payload = _clean_manual_record(biz, data)
-            if payload:
-                exported[biz] = {
-                    "address": payload["address"],
-                    "company_name": payload["company_name"],
-                    "status": "manual",
-                    "updated_at": payload["updated_at"],
-                }
-    return dict(sorted(exported.items()))
+        for biz in unique:
+            if biz in results:
+                continue
+            item = _local_manual.get(biz)
+            if item:
+                results[biz] = dict(item)
+
+    return results
 
 
 def save_manual_address(biz_num, address, company_name=""):

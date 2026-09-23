@@ -240,6 +240,7 @@ def _base_result(biz, **extra):
         "cache_backend": address_cache.active_backend,
         "verified_at": 0,
         "stale": False,
+        "revalidation_failed": False,
         "manual_hit": False,
         "manual_suggestion": False,
         "saved_address": "",
@@ -314,6 +315,33 @@ def _lookup_public_sources(
                 address=address,
                 source=source,
                 found=True,
+            )
+
+    previous_source = str((previous_cache or {}).get("source", "") or "")
+    previous_address = str((previous_cache or {}).get("address", "") or "").strip()
+    if (
+        previous_cache
+        and bool(previous_cache.get("found"))
+        and previous_address
+        and previous_source in PUBLIC_SOURCE_NAMES
+    ):
+        kept = address_cache.keep_stale_after_failed_revalidation(
+            biz,
+            previous_cache,
+        )
+        if kept:
+            return _base_result(
+                biz,
+                address=previous_address,
+                source=previous_source,
+                found=True,
+                cache_hit=True,
+                cache_layer=str(previous_cache.get("cache_layer", "") or ""),
+                verified_at=int(
+                    previous_cache.get("verified_at", previous_cache.get("updated_at", 0)) or 0
+                ),
+                stale=True,
+                revalidation_failed=True,
             )
 
     address_cache.set(

@@ -1340,3 +1340,191 @@ button:disabled {
     margin-top: 0;
   }
 }
+
+
+/* Top workspace v4: conditions in the middle, status on the right. */
+.pre-analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) 310px;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.compact-conditions-card {
+  padding: 21px 22px;
+}
+
+.compact-conditions-card .panel-heading {
+  margin-bottom: 12px;
+}
+
+.condition-compact-grid {
+  display: grid;
+  grid-template-columns: minmax(210px, .8fr) minmax(360px, 1.2fr);
+  gap: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e8f0;
+}
+
+.compact-condition-block {
+  min-width: 0;
+}
+
+.compact-label-row {
+  margin-bottom: 7px;
+}
+
+.compact-segmented {
+  margin: 0;
+}
+
+.compact-segmented button {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.compact-region-select {
+  margin-top: 7px;
+  min-height: 37px;
+  font-size: 13.5px;
+}
+
+.compact-presets {
+  gap: 6px;
+}
+
+.compact-presets button {
+  min-height: 35px;
+  padding: 6px 7px;
+  font-size: 12.5px;
+}
+
+.compact-direct-amount {
+  margin-top: 8px;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.compact-direct-amount > span {
+  font-size: 12px;
+}
+
+.compact-direct-amount .compact-money {
+  min-height: 37px;
+}
+
+.compact-direct-amount .compact-money input {
+  height: 35px;
+  font-size: 13.5px;
+}
+
+.work-status-card {
+  padding: 20px;
+}
+
+.work-status-head {
+  padding-bottom: 11px;
+  border-bottom: 1px solid #e6edf5;
+}
+
+.work-status-head .step {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.work-status-head h2 {
+  margin: 0;
+  color: #17253a;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -.025em;
+}
+
+.work-status-list {
+  display: grid;
+}
+
+.work-status-list > div:not(.work-status-note) {
+  min-height: 46px;
+  padding: 9px 1px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.work-status-list span {
+  color: #697b90;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.work-status-list strong {
+  color: #26384f;
+  font-size: 13.5px;
+  font-weight: 850;
+}
+
+.status-value {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b !important;
+  font-size: 11.5px !important;
+}
+
+.status-value.ready {
+  background: #e9f1ff;
+  color: #245fd1 !important;
+}
+
+.status-value.done {
+  background: #dcfce7;
+  color: #15803d !important;
+}
+
+.work-status-note {
+  margin-top: 12px;
+  padding: 10px 11px;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #697b90;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.work-status-note b {
+  color: #315579;
+}
+
+/* Old duplicated summary styles are intentionally neutralized. */
+.current-work-card,
+.work-summary-list {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .pre-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .work-status-card {
+    order: 2;
+  }
+}
+
+@media (max-width: 820px) {
+  .condition-compact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-presets {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .compact-presets button:last-child {
+    grid-column: 1 / -1;
+  }
+}

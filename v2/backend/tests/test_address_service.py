@@ -119,7 +119,7 @@ class AddressServiceTests(unittest.TestCase):
 
     @patch.object(address_service, "_lookup_public_sources")
     def test_bulk_reports_truthful_completion_progress(self, lookup):
-        lookup.side_effect = lambda biz, manual=None, progress_callback=None: {
+        lookup.side_effect = lambda biz, manual=None, progress_callback=None, *args, **kwargs: {
             "biz_no": biz,
             "address": "충남",
             "source": "나라장터",

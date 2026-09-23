@@ -76,14 +76,14 @@ def _aggregate_records(records):
     return results
 
 
-def build_quarter_report(
-    file_payloads,
+def build_quarter_report_from_source(
+    df,
+    headers,
     target_amount,
     target_region,
     business_addresses=None,
     row_addresses=None,
 ):
-    df, headers = combine_workbooks(file_payloads)
     apply_address_overrides(
         df,
         headers,
@@ -128,3 +128,21 @@ def build_quarter_report(
         "total_amount": sum(value[1] for value in results.values()),
         "results": results,
     }
+
+
+def build_quarter_report(
+    file_payloads,
+    target_amount,
+    target_region,
+    business_addresses=None,
+    row_addresses=None,
+):
+    df, headers = combine_workbooks(file_payloads)
+    return build_quarter_report_from_source(
+        df,
+        headers,
+        target_amount=target_amount,
+        target_region=target_region,
+        business_addresses=business_addresses,
+        row_addresses=row_addresses,
+    )

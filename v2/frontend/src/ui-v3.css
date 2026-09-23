@@ -1932,3 +1932,187 @@ button:disabled {
     flex-wrap: wrap;
   }
 }
+
+
+/* Readability pass v6: travel-expense typography baseline */
+.side-step small {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sidebar-meta {
+  color: #52657d;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.sidebar-meta strong {
+  font-size: 12.5px;
+}
+
+.hero .eyebrow {
+  font-size: 13px;
+}
+
+.hero p {
+  color: #52657d;
+  font-size: 15px;
+}
+
+.condition-label span {
+  font-size: 13px;
+}
+
+.region-one-select {
+  min-height: 42px;
+  font-size: 15px;
+}
+
+.compact-presets button {
+  min-height: 38px;
+  font-size: 13.5px;
+}
+
+.compact-slider-labels {
+  color: #60728a;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.compact-direct-amount > span {
+  font-size: 13.5px;
+}
+
+.compact-direct-amount .compact-money input {
+  font-size: 15px;
+}
+
+.compact-money span {
+  font-size: 13px;
+}
+
+.side-dropzone strong {
+  font-size: 15px;
+}
+
+.side-dropzone span {
+  color: #5d6f84;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.side-analysis-button {
+  font-size: 15px !important;
+}
+
+.side-upload-note,
+.side-output-note {
+  color: #5d6f84;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.side-output-button {
+  min-height: 45px;
+  font-size: 14.5px;
+}
+
+.side-output-status {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.analysis-empty {
+  color: #5b6f87;
+  font-size: 13.5px;
+}
+
+.analysis-summary-head .pill {
+  font-size: 13px;
+}
+
+.analysis-summary-grid span {
+  color: #5f7187;
+  font-size: 13px;
+}
+
+.analysis-summary-grid small {
+  font-size: 12.5px;
+}
+
+.analysis-summary-meta span {
+  color: #62758b;
+  font-size: 13px;
+}
+
+.analysis-summary-meta b {
+  font-size: 13.5px;
+}
+
+.workflow-section-head p,
+.address-lookup-head p {
+  color: #556b83;
+  font-size: 14px;
+}
+
+.optional-label,
+.lookup-target-badge {
+  font-size: 13px;
+}
+
+.lookup-progress-head span,
+.lookup-progress-head b {
+  font-size: 13.5px;
+}
+
+.lookup-progress-current {
+  font-size: 14px;
+}
+
+.lookup-progress-sub {
+  font-size: 13px;
+}
+
+.address-trust-note span {
+  color: #536981;
+  font-size: 12.5px;
+}
+
+.address-trust-note b {
+  font-size: 11.5px;
+}
+
+.source-summary-line {
+  color: #536b60;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.compact-manual-head p {
+  color: #66778b;
+  font-size: 13.5px;
+}
+
+.compact-manual-row .company-cell strong {
+  font-size: 14px;
+}
+
+.compact-manual-row .company-cell span {
+  font-size: 12.5px;
+}
+
+.saved-inline span,
+.saved-inline button {
+  font-size: 12.5px;
+}
+
+.compact-manual-row .address-input {
+  min-height: 37px;
+  font-size: 14px;
+}
+
+.compact-manual-buttons .secondary,
+.compact-manual-buttons .secondary-link {
+  min-height: 34px;
+  font-size: 12.5px;
+}

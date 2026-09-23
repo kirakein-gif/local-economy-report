@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import FinalReport from "./FinalReport";
 import PrepareWorkflow from "./PrepareWorkflow";
 
+const PROGRAM_ICON = "/local-economy-report-icon.png";
+
 export default function App() {
   const [mode, setMode] = useState("prepare");
   const [config, setConfig] = useState(null);
@@ -26,7 +28,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">▦</div>
+          <img className="brand-icon" src={PROGRAM_ICON} alt="" />
           <div>
             <strong>지역경제활성화</strong>
             <span>실적 자동 집계</span>
@@ -63,18 +65,21 @@ export default function App() {
 
       <main className="main">
         <section className="hero">
-          <div>
-            <div className="eyebrow">CHUNGNAM · LOCAL ECONOMY</div>
-            <h1>
-              {isPrepare
-                ? "지역경제활성화 실적 자동 집계"
-                : "반기보고서 최종작성"}
-            </h1>
-            <p>
-              {isPrepare
-                ? "계약자료를 업로드하면 주소를 자동 조회·보완하고 검토용 기초자료까지 생성합니다."
-                : "검토가 끝난 기초자료를 업로드해 공식 1-1~1-4 최종 보고서를 생성합니다."}
-            </p>
+          <div className="hero-brand-row">
+            <img className="hero-program-icon" src={PROGRAM_ICON} alt="" />
+            <div className="hero-copy">
+              <div className="eyebrow">CHUNGNAM · LOCAL ECONOMY</div>
+              <h1>
+                {isPrepare
+                  ? "지역경제활성화 실적 자동 집계"
+                  : "반기보고서 최종작성"}
+              </h1>
+              <p>
+                {isPrepare
+                  ? "계약자료를 업로드하면 주소를 자동 조회·보완하고 검토용 기초자료까지 생성합니다."
+                  : "검토가 끝난 기초자료를 업로드해 공식 1-1~1-4 최종 보고서를 생성합니다."}
+              </p>
+            </div>
           </div>
           <div className="hero-status">
             <span className="status-dot" />

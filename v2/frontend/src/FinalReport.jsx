@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 function downloadNameFromHeader(headerValue) {
   if (!headerValue) return "지역경제활성화_최종보고서.xlsx";
@@ -26,6 +27,11 @@ export default function FinalReport() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState(null);
+  const [sideTarget, setSideTarget] = useState(null);
+
+  useEffect(() => {
+    setSideTarget(document.getElementById("side-workflow-slot"));
+  }, []);
 
   function applyFile(nextFile) {
     if (nextFile && !isExcelFile(nextFile)) {
@@ -120,59 +126,56 @@ export default function FinalReport() {
     }
   }
 
+  const sidePanel = (
+    <section className="side-card side-upload-card">
+      <div className="side-title">검토파일 불러오기</div>
+      <label
+        className={dragActive ? "side-dropzone dragging" : "side-dropzone"}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={(event) => {
+            applyFile(event.target.files?.[0] || null);
+            event.target.value = "";
+          }}
+        />
+        <strong>{file ? file.name : "검토 Excel을 놓거나 클릭"}</strong>
+        <span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 다시 선택하면 교체` : "1-4 기초자료 포함 파일"}</span>
+      </label>
+      <button
+        className="primary side-analysis-button"
+        disabled={busy || !file}
+        onClick={createFinalReport}
+      >
+        {busy ? "최종 보고서 생성 중..." : "최종 보고서 생성"}
+      </button>
+      <div className="side-upload-note">검토파일의 수정값을 최종값으로 사용합니다.</div>
+    </section>
+  );
+
   return (
-    <section className="final-workflow">
-      <div className="workspace-status">
-        검토가 끝난 1-4 기초자료 Excel을 선택하면 공식 4시트 보고서를 생성할 수 있습니다.
-      </div>
+    <>
+      {sideTarget && createPortal(sidePanel, sideTarget)}
 
-      <div className="final-work-grid">
-        <article className="card final-upload-card compact-final-card">
-          <div className="compact-card-heading">
-            <span className="step">STEP 01</span>
-            <h2>1. 검토파일 선택</h2>
-            <p>앞 단계에서 내려받아 확인·수정한 검토용 Excel을 사용합니다.</p>
-          </div>
-
-          <label
-            className={dragActive ? "dropzone final-dropzone compact-dropzone dragging" : "dropzone final-dropzone compact-dropzone"}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(event) => {
-                applyFile(event.target.files?.[0] || null);
-                event.target.value = "";
-              }}
-            />
-            <strong>{file ? file.name : "검토 완료 Excel을 여기에 놓거나 클릭"}</strong>
-            <span>{file ? "클릭하거나 다른 파일을 놓으면 교체됩니다." : "1-4 기초자료가 포함된 검토용 파일"}</span>
-          </label>
-
-          <div className="final-file-note">
-            {file
-              ? <>선택 파일 <b>{file.name}</b><span>{(file.size / 1024 / 1024).toFixed(2)} MB</span></>
-              : <>사용자가 수정한 주소·소재지·구입목적 값을 최종값으로 사용합니다.</>}
-          </div>
-        </article>
-
-        <aside className="card final-result-card">
+      <section className="final-workflow">
+        <article className="card final-result-card final-overview-card">
           <div className="result-head">
             <div>
-              <p className="result-kicker">FINAL RESULT</p>
+              <p className="result-kicker">FINAL REPORT</p>
               <h2>최종 4시트 보고서</h2>
             </div>
             <span className={file ? "result-state done" : "result-state"}>
-              {file ? "생성 가능" : "파일 대기"}
+              {file ? "생성 준비 완료" : "검토파일 대기"}
             </span>
           </div>
 
           <div className="hint result-guide">
-            검토파일의 수정값을 반영하고, 필요한 항목만 보고 기준에 맞게 자동 보정합니다.
+            왼쪽에서 검토 완료 Excel을 선택하면 수정값을 반영해 공식 반기보고서 4개 시트를 생성합니다.
           </div>
 
           <div className="final-sheet-grid">
@@ -183,24 +186,21 @@ export default function FinalReport() {
           </div>
 
           <div className="final-compact-checks">
-            <span>✓ 수정한 검토값을 최종값으로 사용</span>
-            <span>✓ 잘못된 소재지는 주소 기준으로 보정</span>
-            <span>✓ 물품 구입목적의 빈 값·비정상 값 보정</span>
+            <span>✓ 사용자가 수정한 주소·소재지·구입목적을 최종값으로 사용</span>
+            <span>✓ 잘못된 소재지는 주소를 기준으로 자동 보정</span>
+            <span>✓ 물품 구입목적의 빈 값·비정상 값은 보고 기준에 맞게 보정</span>
+            <span>✓ 공식 반기보고서 서식의 4개 시트를 그대로 생성</span>
           </div>
-
-          <button className="primary final-download-button" disabled={busy || !file} onClick={createFinalReport}>
-            {busy ? "최종 보고서 생성 중..." : "최종 보고서 다운로드"}
-          </button>
 
           {info && (
             <div className="alert success compact-final-alert">
               생성 완료 · 기초자료 {formatNumber(info.recordCount)}건 · 소재지 보정 {formatNumber(info.correctedLocationCount)}건 · 구입목적 보정 {formatNumber(info.purposeCorrectionCount)}건
             </div>
           )}
-        </aside>
-      </div>
+        </article>
 
-      {error && <div className="alert error">{error}</div>}
-    </section>
+        {error && <div className="alert error">{error}</div>}
+      </section>
+    </>
   );
 }

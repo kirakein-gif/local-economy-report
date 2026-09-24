@@ -36,7 +36,7 @@ from .report_service import (
     build_review_workbook_from_source,
 )
 
-APP_VERSION = "2.0.0-alpha.8"
+APP_VERSION = "2.0.0"
 MAX_FILES = 20
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TOTAL_BYTES = 120 * 1024 * 1024
